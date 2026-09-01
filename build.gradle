@@ -103,10 +103,20 @@ subprojects {
       failOnError = true
       suppressionFile = "${rootDir}/dependency-suppressions.xml"
       format = "ALL"
+      // Everything this project is not, plus centralEnabled: that analyzer asks
+      // search.maven.org about every jar, which a runner without direct internet
+      // access cannot do — and the plugin reports it as a bare "Analysis failed".
       analyzers.assemblyEnabled = false
       analyzers.retirejs.enabled = false
       analyzers.nodeEnabled = false
+      analyzers.nodePackage.enabled = false
       analyzers.nodeAuditEnabled = false
+      analyzers.nuspecEnabled = false
+      analyzers.bundleAuditEnabled = false
+      analyzers.pyPackageEnabled = false
+      analyzers.pyDistributionEnabled = false
+      analyzers.rubygemsEnabled = false
+      analyzers.centralEnabled = false
       data.connectionString = depcheckUrl
       if (depcheckDriver) {
         data.driver = depcheckDriver
