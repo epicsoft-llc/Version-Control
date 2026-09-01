@@ -96,6 +96,26 @@ subprojects {
       depcheckDriverPath = configurations.detachedConfiguration(driverDependency).singleFile.absolutePath
     }
 
+    // A driver jar without the class name is the trap: dependency-check then
+    // loads its default driver from a classloader holding only that jar and
+    // reports "ClassNotFoundException: org.h2.Driver" — which points nowhere
+    // near the actual mistake.
+    if (depcheckDriverJar && !depcheckDriver) {
+      throw new GradleException("VC_DEPCHECK_DRIVER_JAR is set but VC_DEPCHECK_DRIVER is not. " +
+                                "Name the driver class, for example org.mariadb.jdbc.Driver.")
+    }
+    if (depcheckDriver && !depcheckDriverJar) {
+      throw new GradleException("VC_DEPCHECK_DRIVER is set but VC_DEPCHECK_DRIVER_JAR is not. " +
+                                "Name the artifact holding it, for example org.mariadb.jdbc:mariadb-java-client:3.5.8.")
+    }
+
+    // Reports what the plugin was handed, never a value.
+    logger.lifecycle("depcheck: url={} driver={} driverJar={} user={}",
+                     depcheckUrl.replaceFirst(/^(jdbc:[a-z0-9]+:).*/, '$1…') ?: "unset",
+                     depcheckDriver ?: "unset",
+                     depcheckDriverPath ? "resolved" : "unset",
+                     depcheckUser ? "set" : "unset")
+
     dependencyCheck {
       autoUpdate = false
       skipTestGroups = true
