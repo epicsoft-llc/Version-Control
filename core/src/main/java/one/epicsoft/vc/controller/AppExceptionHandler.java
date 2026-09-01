@@ -10,9 +10,11 @@ import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -31,6 +33,8 @@ public class AppExceptionHandler {
 
   private static final String KEY_VALIDATION = "error.validation";
   private static final String KEY_UNEXPECTED = "error.unexpected";
+  private static final String KEY_NOT_FOUND = "error.notFound";
+  private static final String KEY_METHOD = "error.methodNotAllowed";
 
   private final MessageSource messageSource;
 
@@ -55,6 +59,23 @@ public class AppExceptionHandler {
                                                          .toList();
     log.debug("Validation failed: {}", fields);
     return this.build(HttpStatus.BAD_REQUEST, KEY_VALIDATION, fields);
+  }
+
+  /**
+   * A path nobody serves. Without this the catch-all below would answer 500 and
+   * log a stack trace for every stray request — a client error dressed up as a
+   * server error, and noise that buries the real ones.
+   */
+  @ExceptionHandler(NoResourceFoundException.class)
+  public ResponseEntity<ErrorDto> handleNoResource(@Nonnull final NoResourceFoundException exception) {
+    log.debug("No handler for '{}'", exception.getResourcePath());
+    return this.build(HttpStatus.NOT_FOUND, KEY_NOT_FOUND, List.of());
+  }
+
+  @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+  public ResponseEntity<ErrorDto> handleMethod(@Nonnull final HttpRequestMethodNotSupportedException exception) {
+    log.debug("Method not allowed: {}", exception.getMessage());
+    return this.build(HttpStatus.METHOD_NOT_ALLOWED, KEY_METHOD, List.of());
   }
 
   @ExceptionHandler(Exception.class)

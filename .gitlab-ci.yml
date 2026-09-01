@@ -18,7 +18,9 @@ variables:
   VERSION: ${CI_COMMIT_REF_NAME}
   GRADLE_OPTS: "-Dorg.gradle.console=plain -Dorg.gradle.daemon=false"
   GRADLE_USER_HOME: "${CI_PROJECT_DIR}/.gradle"
-  JDK_IMAGE: eclipse-temurin:25-jdk
+  #### https://hub.docker.com/r/epicsoft/openjdk
+  JDK_IMAGE: epicsoft/openjdk:jdk25-latest
+  JRE_IMAGE_VERSION: jre25-latest
   NODE_IMAGE: node:24-alpine
   BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
 
@@ -165,9 +167,13 @@ IMG:core:
   variables:
     VC_IMAGE: ${CI_REGISTRY_IMAGE}:vc-core-${VERSION}
   script:
-    - JAR_FILE=$(ls core/build/libs/vc-core-*.jar | head -1)
+    #### Belt and braces: the plain jar is disabled in the build, and the
+    #### selection excludes it anyway — picking it produces an image that starts
+    #### and dies with "no main manifest attribute".
+    - JAR_FILE=$(ls core/build/libs/vc-core-*.jar | grep -v -- '-plain' | head -1)
     - echo "Building ${VC_IMAGE} from ${JAR_FILE}"
     - docker build --pull -t ${VC_IMAGE} core
+      --build-arg IMAGE_VERSION=${JRE_IMAGE_VERSION}
       --build-arg APP_VERSION=${VERSION}
       --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
       --build-arg JAR_FILE=$(basename ${JAR_FILE} | sed 's|^|build/libs/|')

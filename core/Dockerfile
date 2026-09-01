@@ -1,4 +1,9 @@
-FROM eclipse-temurin:25-jre
+# https://hub.docker.com/r/epicsoft/openjdk — public, Alpine based, and its
+# busybox brings the wget the container health check needs. (A Debian based JRE
+# image carries neither wget nor curl; the check then fails on a perfectly
+# healthy application, while the application's own log looks fine.)
+ARG IMAGE_VERSION=jre25-latest
+FROM epicsoft/openjdk:$IMAGE_VERSION
 
 ARG APP_VERSION="development"
 ARG BUILD_DATE="development"
@@ -25,7 +30,8 @@ EXPOSE 8080 8090
 ARG JAR_FILE
 COPY ${JAR_FILE} /app.jar
 
-RUN useradd --system --uid 10001 --no-create-home vc
-USER 10001
+# Numeric only: no passwd entry is needed to run a JVM, and it keeps this
+# working on any base image.
+USER 10001:10001
 
 ENTRYPOINT [ "sh", "-c", "java $JAVA_SERVER $JAVA_DOCKER $JAVA_ENCODING $JAVA_TIMEZONE $JAVA_ERROR $JAVA_OPTS -jar /app.jar" ]

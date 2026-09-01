@@ -11,6 +11,14 @@ base {
   archivesName = "vc-core"
 }
 
+// Only the executable jar, no plain one. Spring Boot builds both by default, and
+// `ls vc-core-*.jar` then finds "vc-core-<version>-plain.jar" first — the hyphen
+// sorts before the dot. The image would start and fail with "no main manifest
+// attribute", which says nothing about the actual cause.
+tasks.named("jar") {
+  enabled = false
+}
+
 java {
   sourceCompatibility = JavaVersion.VERSION_25
   targetCompatibility = JavaVersion.VERSION_25

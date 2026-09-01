@@ -1,4 +1,5 @@
 {
+  "error.methodNotAllowed": "Diese Aktion ist hier nicht erlaubt.",
   "error.notFound": "Der angeforderte Eintrag existiert nicht.",
   "error.unexpected": "Da ist etwas schiefgegangen. Bitte erneut versuchen.",
   "error.validation": "Bitte die markierten Felder prüfen."

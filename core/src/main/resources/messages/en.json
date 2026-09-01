@@ -1,4 +1,5 @@
 {
+  "error.methodNotAllowed": "This action is not allowed here.",
   "error.notFound": "The requested entry does not exist.",
   "error.unexpected": "Something went wrong. Please try again.",
   "error.validation": "Please check the highlighted fields."

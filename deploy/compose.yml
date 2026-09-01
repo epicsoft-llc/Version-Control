@@ -6,6 +6,9 @@
 #
 # The images can either be pulled from the registry or built from this checkout;
 # comment the `image` line and uncomment `build` to work with local changes.
+#
+# VC_IMAGE_TAG selects the branch the images were built from — "main" by default,
+# "develop" to run what is currently in development.
 
 name: version-control
 
@@ -19,7 +22,13 @@ services:
       POSTGRES_USER: ${VC_DATABASE_USERNAME:?set VC_DATABASE_USERNAME}
       POSTGRES_PASSWORD: ${VC_DATABASE_PASSWORD:?set VC_DATABASE_PASSWORD}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      #### PostgreSQL 18 stores its data in a major-version subdirectory, so the
+      #### mount goes one level up. Mounting /var/lib/postgresql/data directly —
+      #### correct for 17 and earlier — makes the container refuse to start:
+      #### "there appears to be PostgreSQL data in /var/lib/postgresql/data
+      #### (unused mount/volume)". This layout is also what makes a later
+      #### pg_upgrade possible without mount point boundary issues.
+      - postgres-data:/var/lib/postgresql
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${VC_DATABASE_USERNAME} -d ${VC_DATABASE_NAME:-versioncontrol}" ]
       interval: 10s
@@ -27,7 +36,7 @@ services:
       retries: 10
 
   core:
-    image: registry.gitlab.com/epicsoft-networks/version-control:vc-core-main
+    image: registry.gitlab.com/epicsoft-networks/version-control:vc-core-${VC_IMAGE_TAG:-main}
     # build:
     #   context: ../core
     #   args:
@@ -60,7 +69,7 @@ services:
           memory: 1024M
 
   dashboard:
-    image: registry.gitlab.com/epicsoft-networks/version-control:vc-dashboard-main
+    image: registry.gitlab.com/epicsoft-networks/version-control:vc-dashboard-${VC_IMAGE_TAG:-main}
     # build:
     #   context: ../dashboard
     restart: unless-stopped
