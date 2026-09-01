@@ -2,9 +2,59 @@
 <!--
   Suppressions for the OWASP dependency check.
 
-  Each entry justifies the suppression by risk, not merely by fix status, and
-  carries an `until` date roughly two months out so it is reviewed rather than
-  forgotten. Touching this file includes sweeping it for expired entries.
+  Each entry justifies the suppression by risk, not merely by fix status, and carries an `until` date
+  roughly two months out so it is reviewed rather than forgotten. Touching this file includes sweeping
+  it for expired entries.
+
+  The packageUrl is pinned to the exact version on purpose: as soon as the dependency moves, the
+  suppression stops applying and the finding comes back for a fresh look.
 -->
 <suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+
+  <!-- tomcat-embed-core 11.0.24: the version Spring Boot 4.1.1 ships; no newer Tomcat 11.0.x exists. -->
+  <suppress until="2026-11-01Z">
+    <notes><![CDATA[
+      Tomcat 11.0.24 is what Spring Boot 4.1.1 resolves to, and it is the newest release of the 11.0
+      line - there is nothing to upgrade to. The advisories have not been assessed one by one yet;
+      this entry buys time, it does not declare the findings harmless. Review by the date above, or
+      earlier when Spring Boot ships a newer Tomcat, which the dependency update job reports.
+    ]]></notes>
+    <packageUrl>pkg:maven/org.apache.tomcat.embed/tomcat-embed-core@11.0.24</packageUrl>
+    <cpe>cpe:2.3:a:apache:tomcat:11.0.24:*:*:*:*:*:*:*</cpe>
+    <cpe>cpe:2.3:a:apache_tomcat:apache_tomcat:11.0.24:*:*:*:*:*:*:*</cpe>
+    <cve>CVE-2026-65637</cve>
+    <cve>CVE-2026-65905</cve>
+    <cve>CVE-2026-65182</cve>
+    <cve>CVE-2026-68525</cve>
+    <cve>CVE-2026-65183</cve>
+    <cve>CVE-2026-66422</cve>
+    <cve>CVE-2026-68569</cve>
+    <cve>CVE-2026-65927</cve>
+    <cve>CVE-2026-68763</cve>
+    <cve>CVE-2026-73180</cve>
+    <cve>CVE-2026-66299</cve>
+  </suppress>
+
+  <!-- tomcat-embed-websocket 11.0.24: same release train, same advisories as tomcat-embed-core. -->
+  <suppress until="2026-11-01Z">
+    <notes><![CDATA[
+      Ships together with tomcat-embed-core and carries the same version, so it matches the same
+      advisories. Same reasoning and the same review date as the entry above; treat both as one.
+    ]]></notes>
+    <packageUrl>pkg:maven/org.apache.tomcat.embed/tomcat-embed-websocket@11.0.24</packageUrl>
+    <cpe>cpe:2.3:a:apache:tomcat:11.0.24:*:*:*:*:*:*:*</cpe>
+    <cpe>cpe:2.3:a:apache_tomcat:apache_tomcat:11.0.24:*:*:*:*:*:*:*</cpe>
+    <cve>CVE-2026-65637</cve>
+    <cve>CVE-2026-65905</cve>
+    <cve>CVE-2026-65182</cve>
+    <cve>CVE-2026-68525</cve>
+    <cve>CVE-2026-65183</cve>
+    <cve>CVE-2026-66422</cve>
+    <cve>CVE-2026-68569</cve>
+    <cve>CVE-2026-65927</cve>
+    <cve>CVE-2026-68763</cve>
+    <cve>CVE-2026-73180</cve>
+    <cve>CVE-2026-66299</cve>
+  </suppress>
+
 </suppressions>

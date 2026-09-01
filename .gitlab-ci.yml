@@ -107,11 +107,10 @@ SEC:core:
   before_script:
     - chmod +x gradlew
   script:
-    #### "Analysis failed" alone says nothing, so the stack trace is on. It can
-    #### name the connection string, which GitLab cannot mask (slashes), hence
-    #### the redaction — job logs of a public project are readable by anyone.
+    #### Redacted because GitLab cannot mask a connection string (slashes) and
+    #### job logs of a public project are readable by anyone.
     - set -o pipefail
-    - ./gradlew :core:dependencyCheckAnalyze --stacktrace 2>&1
+    - ./gradlew :core:dependencyCheckAnalyze 2>&1
       | sed -e "s|${VC_DEPCHECK_URL}|[redacted]|g"
             -e "s|${VC_DEPCHECK_USERNAME}|[redacted]|g"
             -e "s|${VC_DEPCHECK_PASSWORD}|[redacted]|g"
