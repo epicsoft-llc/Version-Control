@@ -1,7 +1,5 @@
-# https://hub.docker.com/r/epicsoft/openjdk — public, Alpine based, and its
-# busybox brings the wget the container health check needs. (A Debian based JRE
-# image carries neither wget nor curl; the check then fails on a perfectly
-# healthy application, while the application's own log looks fine.)
+# https://hub.docker.com/r/epicsoft/openjdk — Alpine based, so busybox provides
+# the wget the container health check needs.
 ARG IMAGE_VERSION=jre25-latest
 FROM epicsoft/openjdk:$IMAGE_VERSION
 
@@ -23,15 +21,13 @@ ENV JAVA_SERVER="-server" \
     JAVA_ERROR="-XX:+ExitOnOutOfMemoryError" \
     JAVA_OPTS=""
 
-# 8080 serves the API, 8090 the actuator. The management port stays inside the
-# compose network so the health check can use it without exposing it.
+# 8080 API, 8090 actuator — the latter stays inside the compose network.
 EXPOSE 8080 8090
 
 ARG JAR_FILE
 COPY ${JAR_FILE} /app.jar
 
-# Numeric only: no passwd entry is needed to run a JVM, and it keeps this
-# working on any base image.
+# Numeric: a JVM needs no passwd entry, and this works on any base image.
 USER 10001:10001
 
 ENTRYPOINT [ "sh", "-c", "java $JAVA_SERVER $JAVA_DOCKER $JAVA_ENCODING $JAVA_TIMEZONE $JAVA_ERROR $JAVA_OPTS -jar /app.jar" ]

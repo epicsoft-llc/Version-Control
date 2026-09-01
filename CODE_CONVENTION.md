@@ -48,6 +48,9 @@ if (nonNull(value)) {
 The code says what it does. A comment earns its place by saying why — a decision, a trade-off, a trap
 someone will otherwise walk into a second time. Comments that restate the next line are deleted.
 
+Keep them short and rare. A file where every second line is a comment is not better documented, it is
+harder to read: the reader stops seeing the code. One or two lines for the reason, not a paragraph.
+
 ---
 
 ## Java

@@ -1,14 +1,11 @@
-# Local stack: PostgreSQL, backend, dashboard. One entry point on
-# http://localhost:8081 — the dashboard serves the interface and forwards /api.
+# Local stack: PostgreSQL, backend, dashboard. The dashboard is the entry point;
+# it serves the interface and forwards /api.
 #
 #   cp ../.env.example ../.env   and fill it in
 #   docker compose up
 #
-# The images can either be pulled from the registry or built from this checkout;
-# comment the `image` line and uncomment `build` to work with local changes.
-#
-# VC_IMAGE_TAG selects the branch the images were built from — "main" by default,
-# "develop" to run what is currently in development.
+# Swap `image` for the commented `build` block to run local changes.
+# VC_IMAGE_TAG picks the branch the images came from (default: main).
 
 name: version-control
 
@@ -22,12 +19,8 @@ services:
       POSTGRES_USER: ${VC_DATABASE_USERNAME:?set VC_DATABASE_USERNAME}
       POSTGRES_PASSWORD: ${VC_DATABASE_PASSWORD:?set VC_DATABASE_PASSWORD}
     volumes:
-      #### PostgreSQL 18 stores its data in a major-version subdirectory, so the
-      #### mount goes one level up. Mounting /var/lib/postgresql/data directly —
-      #### correct for 17 and earlier — makes the container refuse to start:
-      #### "there appears to be PostgreSQL data in /var/lib/postgresql/data
-      #### (unused mount/volume)". This layout is also what makes a later
-      #### pg_upgrade possible without mount point boundary issues.
+      #### Not /var/lib/postgresql/data: 18+ keeps its data in a major-version
+      #### subdirectory and refuses to start when that path is mounted directly.
       - postgres-data:/var/lib/postgresql
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${VC_DATABASE_USERNAME} -d ${VC_DATABASE_NAME:-versioncontrol}" ]
@@ -51,13 +44,12 @@ services:
       VC_DATABASE_NAME: ${VC_DATABASE_NAME:-versioncontrol}
       VC_DATABASE_USERNAME: ${VC_DATABASE_USERNAME}
       VC_DATABASE_PASSWORD: ${VC_DATABASE_PASSWORD}
-      # Optional. An unset value disables the feature cleanly — it is never sent
-      # to the upstream API as a placeholder.
+      # Optional; unset disables the feature instead of half-configuring it.
       VC_GITHUB_TOKEN: ${VC_GITHUB_TOKEN:-}
       VC_TELEGRAM_BOT_TOKEN: ${VC_TELEGRAM_BOT_TOKEN:-}
       VC_TELEGRAM_CHAT_ID: ${VC_TELEGRAM_CHAT_ID:-}
     healthcheck:
-      # The actuator listens on its own port, which stays inside this network.
+      # The actuator port stays inside this network.
       test: [ "CMD-SHELL", "wget -q -O - http://127.0.0.1:8090/actuator/health | grep '\"status\":\"UP\"'" ]
       interval: 15s
       timeout: 5s

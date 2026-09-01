@@ -47,10 +47,7 @@ subprojects {
   }
 
   // ###########################################################
-  // #### Test
-  // #### Unit tests run everywhere. Tests tagged "integration"
-  // #### need Docker (Testcontainers) and are skipped without it,
-  // #### so `./gradlew test` stays green on a machine without it.
+  // #### Test — "integration" needs Docker and is skipped without it
   // ###########################################################
   tasks.named("test") {
     useJUnitPlatform {
@@ -75,11 +72,10 @@ subprojects {
   // ###########################################################
   // #### OWASP dependency check — only when configured
   // ####
-  // #### It reads a shared NVD database. Connection string, driver and
-  // #### credentials come from the environment and have no default here — not
-  // #### even the kind of database. Without them the plugin is not applied at
-  // #### all, so a contributor without access is never blocked.
   // #### ./gradlew :core:dependencyCheckAnalyze
+  // ####
+  // #### Everything about that database comes from the environment, down to the
+  // #### kind of database. Unset means the plugin is not applied at all.
   // ###########################################################
   final def depcheckUrl = System.getenv("VC_DEPCHECK_URL")
   final def depcheckDriver = System.getenv("VC_DEPCHECK_DRIVER")
@@ -118,11 +114,7 @@ subprojects {
   }
 }
 
-/**
- * True when a Docker daemon answers. Integration tests start a PostgreSQL
- * container; without a daemon they are skipped rather than failing, so the
- * project stays buildable for anyone.
- */
+/** True when a Docker daemon answers; integration tests need one. */
 static boolean dockerAvailable() {
   try {
     final def process = new ProcessBuilder("docker", "info")

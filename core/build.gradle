@@ -11,10 +11,8 @@ base {
   archivesName = "vc-core"
 }
 
-// Only the executable jar, no plain one. Spring Boot builds both by default, and
-// `ls vc-core-*.jar` then finds "vc-core-<version>-plain.jar" first — the hyphen
-// sorts before the dot. The image would start and fail with "no main manifest
-// attribute", which says nothing about the actual cause.
+// Executable jar only. With both, "vc-core-<version>-plain.jar" sorts first and
+// ends up in the image, which then dies with "no main manifest attribute".
 tasks.named("jar") {
   enabled = false
 }
@@ -75,30 +73,25 @@ dependencies {
 // #### ./gradlew :core:pullTranslations
 // #### ./gradlew :core:verifyTranslations
 // ###########################################################
-//// Instance and project come from the environment — nothing about them is
-//// stored in this repository. Without the variables `pullTranslations` reports
-//// which one is missing; `verifyTranslations` needs neither and keeps working,
-//// so `check` stays green for everyone.
+// Instance and project come from the environment, never from this repository.
+// verifyTranslations needs neither, so `check` stays green without them.
 tolgee {
-  //// Environment first, then ~/.gradle/gradle.properties (vcTolgeeUrl,
-  //// vcTolgeeProjectId) — the workstation keeps this outside every repository.
+  //// Environment first, then ~/.gradle/gradle.properties.
   url = providers.environmentVariable("VC_TOLGEE_URL").orElse(providers.gradleProperty("vcTolgeeUrl"))
   projectId = providers.environmentVariable("VC_TOLGEE_PROJECT_ID")
                        .orElse(providers.gradleProperty("vcTolgeeProjectId"))
                        .map { Integer.parseInt(it) }
-  //// Which keys belong to this artifact — a property of the module, not of the
-  //// environment, so it stays here. The dashboard keeps its own the same way.
+  //// Which keys this artifact consumes — a property of the module.
   tag = "core"
   languages = ["de", "en"]
   outputDir = layout.projectDirectory.dir("src/main/resources/messages")
   fallbackLanguage = "en"
-  //// Only the *name* of the variable — never the token itself.
+  //// The variable's name, never the token.
   apiKeyEnv = "VC_TOLGEE_API_KEY"
 }
 
-// The plugin wires nothing into the lifecycle on its own — that is this
-// project's call. Verification is offline and cheap, so it runs with `check`;
-// the download stays manual so an ordinary build never needs the network.
+// Verification is offline and cheap, so it runs with `check`. The download stays
+// manual — an ordinary build must not need the network.
 tasks.named("check") {
   dependsOn tasks.named("verifyTranslations")
 }

@@ -1,23 +1,13 @@
-// pluginManagement must be the first statement in this file — the lookups below
-// are therefore written out inside the blocks instead of sharing a helper
-// defined above them.
+// An optional package mirror, configured through the environment or through the
+// developer's ~/.gradle/gradle.properties — nothing about it is stored here.
+// Without it the build resolves from the Gradle Plugin Portal and Maven Central.
 //
-// An optional package mirror can be configured. Nothing about it is stored here:
-// without the settings the build resolves straight from the Gradle Plugin Portal
-// and Maven Central, which is what a contributor without any of this gets.
+//   VC_GRADLE_PLUGIN_MIRROR_URL   vcGradlePluginMirrorUrl
+//   VC_MAVEN_MIRROR_URL           vcMavenMirrorUrl
+//   VC_MAVEN_MIRROR_USERNAME      vcMavenMirrorUsername
+//   VC_MAVEN_MIRROR_PASSWORD      vcMavenMirrorPassword
 //
-// Two ways to set them, environment first:
-//
-//   environment variable          ~/.gradle/gradle.properties
-//   ---------------------------   ---------------------------
-//   VC_GRADLE_PLUGIN_MIRROR_URL   vcGradlePluginMirrorUrl      mirror for plugins
-//   VC_MAVEN_MIRROR_URL           vcMavenMirrorUrl             mirror for dependencies
-//   VC_MAVEN_MIRROR_USERNAME      vcMavenMirrorUsername        optional, both
-//   VC_MAVEN_MIRROR_PASSWORD      vcMavenMirrorPassword        optional, both
-//
-// The properties file belongs to the developer, not to the machine, and lives
-// outside every repository — the usual place for this on a workstation. CI sets
-// the environment variables instead.
+// The lookups sit inside the blocks because pluginManagement must come first.
 
 pluginManagement {
   repositories {

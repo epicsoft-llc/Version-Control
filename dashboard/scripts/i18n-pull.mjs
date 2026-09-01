@@ -1,26 +1,12 @@
 // Pulls the dashboard translations from Tolgee into src/assets/i18n/<lang>.json.
-//
 // Run with: npm run i18n:pull
 //
-// Instance, project and token come from the environment, so nothing about the
-// instance is stored in this repository, and CI can redirect the output into the
-// build directory instead of the source tree:
+// From the environment: VC_TOLGEE_API_KEY (without it nothing is touched),
+// VC_TOLGEE_URL, VC_TOLGEE_PROJECT_ID, optionally VC_TOLGEE_LANGS and
+// VC_TOLGEE_OUT_DIR, which CI points at the build directory.
 //
-//   VC_TOLGEE_API_KEY     required — without it the committed files are kept
-//   VC_TOLGEE_URL         base URL of the instance
-//   VC_TOLGEE_PROJECT_ID  numeric project id
-//   VC_TOLGEE_LANGS       comma separated, default "de,en"
-//   VC_TOLGEE_OUT_DIR     output directory, relative to the project
-//   VC_TOLGEE_TAG         override for the tag below; normally not set
-//
-// Which keys belong to this artifact is a property of the artifact, not of the
-// environment — so the tag lives here, exactly as the backend keeps its own in
-// core/build.gradle. Instance, project and token are deployment facts and come
-// from the environment.
-//
-// The behaviour mirrors the backend's Gradle plugin on purpose: all languages
-// are fetched before the first file is written, an empty or nested response is
-// an error, and without a token nothing is touched at all.
+// Mirrors the backend's Gradle plugin: all languages are fetched before the
+// first file is written, and an empty or nested response is an error.
 
 import {mkdir, writeFile} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
@@ -49,11 +35,8 @@ for (const [name, value] of Object.entries({VC_TOLGEE_URL: url, VC_TOLGEE_PROJEC
   }
 }
 
-/**
- * `structureDelimiter` is sent empty on purpose: it keeps the JSON flat. With a
- * delimiter Tolgee nests on every "." in a key and ngx-translate resolves
- * nothing — the build stays green and only the interface is empty.
- */
+/** The empty `structureDelimiter` keeps the JSON flat; nested, ngx-translate
+ *  resolves nothing and only the interface ends up empty. */
 async function fetchLanguage(lang) {
   const exportUrl = `${url}/v2/projects/${projectId}/export`
     + `?languages=${encodeURIComponent(lang)}&format=JSON&zip=false&structureDelimiter=&filterTag=${encodeURIComponent(tag)}`;

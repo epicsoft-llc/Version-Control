@@ -53,11 +53,16 @@ each group is all-or-nothing — set every variable in it or none.
 |---|---|---|
 | Translations | `VC_TOLGEE_API_KEY`, `VC_TOLGEE_URL`, `VC_TOLGEE_PROJECT_ID` | the committed translation files are shipped as they are |
 | Vulnerability scan | `VC_DEPCHECK_URL`, `VC_DEPCHECK_USERNAME`, `VC_DEPCHECK_PASSWORD`, `VC_DEPCHECK_RUNNER_TAG`, optionally `VC_DEPCHECK_DRIVER` | the job does not run |
-| Package mirror | `VC_MAVEN_MIRROR_URL`, `VC_GRADLE_PLUGIN_MIRROR_URL`, `VC_MAVEN_MIRROR_USERNAME`, `VC_MAVEN_MIRROR_PASSWORD`, `VC_NPMRC` (file) | Maven Central, the Gradle Plugin Portal and npm are used directly |
+| Package mirror | `VC_MAVEN_MIRROR_URL`, `VC_GRADLE_PLUGIN_MIRROR_URL`, `VC_MAVEN_MIRROR_USERNAME`, `VC_MAVEN_MIRROR_PASSWORD`, `VC_NPM_REGISTRY`, `VC_NPM_USERNAME`, `VC_NPM_PASSWORD` | Maven Central, the Gradle Plugin Portal and npm are used directly |
 
 Mask every credential. Do **not** mark them *protected* unless the branch is protected too — a protected
 variable is absent on an unprotected branch, and the translation pull would then quietly ship the
 committed files instead of failing.
+
+**Job logs are readable by anyone** while *Public pipelines* is enabled on a public project. No step may
+print a configuration, a registry address or an environment dump: masking protects only the values of
+masked variables, and file variables are not masked at all. Diagnostics say which path was taken, never
+with which values.
 
 The image jobs need the project's container registry enabled and a runner tagged `image`; the test job
 needs a runner that can run `docker:dind`, because the integration tests start a database container.

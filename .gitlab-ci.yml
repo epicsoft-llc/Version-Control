@@ -65,7 +65,7 @@ TST:core:
     - name: docker:dind
       alias: docker
   variables:
-    #### Testcontainers talks to the dind service instead of a local socket.
+    #### Testcontainers talks to the dind service, not a local socket.
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
     TESTCONTAINERS_RYUK_DISABLED: "true"
@@ -84,10 +84,8 @@ TST:core:
   needs: [ "BLD:core" ]
   retry: 1
 
-#### Reports dependencies that are behind. The task fails when it finds any, and
-#### allow_failure turns that into a warning on the pipeline instead of a stop:
-#### an available update is something to look at, not a reason to block a merge —
-#### and a pipeline that goes red for it teaches people to ignore red.
+#### The task fails on available updates; allow_failure turns that into a
+#### warning rather than a stop — red for an update teaches people to ignore red.
 DEP:core:
   stage: dependency
   image: ${JDK_IMAGE}
@@ -101,10 +99,8 @@ DEP:core:
   needs: [ "BLD:core" ]
   allow_failure: true
 
-#### OWASP dependency check against a shared NVD database. Connection, credentials
-#### and the runner tag come from CI variables only; without them the job does not
-#### run, so a fork or a contributor is never blocked by it — and nothing about
-#### that infrastructure is described in this repository.
+#### Runs only when the VC_DEPCHECK_* variables exist, so nothing about that
+#### database is described here and no contributor is blocked by it.
 SEC:core:
   stage: security
   image: ${JDK_IMAGE}
@@ -124,21 +120,31 @@ SEC:core:
 ###############################################################################
 #### dashboard (frontend)
 ###############################################################################
-#### A mirror that requires authentication needs more than a registry URL: npm
-#### sends no credentials for a bare NPM_CONFIG_REGISTRY and the mirror answers
-#### 403. VC_NPMRC is a *file* type CI variable holding a complete .npmrc —
-#### registry line plus credentials. Without it npm goes to npmjs.org directly,
-#### which is what a fork or an outside contributor gets.
+#### Without the VC_NPM_* variables npm uses the public registry.
 BLD:dashboard:
   stage: build
   image: ${NODE_IMAGE}
   before_script:
-    - if [ -n "$VC_NPMRC" ]; then cp "$VC_NPMRC" "$HOME/.npmrc"; fi
+    - |
+      #### Credential keys are derived from the registry URL itself, so the two
+      #### cannot disagree — npm then finds no credentials and gets a 401.
+      #### Nothing here may print a value: job logs are public.
+      if [ -n "$VC_NPM_REGISTRY" ]; then
+        base="${VC_NPM_REGISTRY%/}/"
+        key="${base#http*:}"
+        {
+          echo "registry=$base"
+          echo "${key}:username=$VC_NPM_USERNAME"
+          echo "${key}:_password=$(printf '%s' "$VC_NPM_PASSWORD" | base64 | tr -d '\n')"
+        } > "$HOME/.npmrc"
+        unset NPM_CONFIG_REGISTRY
+        echo "npm: mirror configured"
+      else
+        echo "npm: public registry"
+      fi
     - cd dashboard
   script:
     - npm ci --no-audit --no-fund
-    #### Pull translations when a token is configured; otherwise the committed
-    #### files are shipped as they are.
     - node scripts/i18n-pull.mjs
     - npm run build
   cache: *node-cache
@@ -173,9 +179,7 @@ IMG:core:
   variables:
     VC_IMAGE: ${CI_REGISTRY_IMAGE}:vc-core-${VERSION}
   script:
-    #### Belt and braces: the plain jar is disabled in the build, and the
-    #### selection excludes it anyway — picking it produces an image that starts
-    #### and dies with "no main manifest attribute".
+    #### Excludes the plain jar — it would start and die with "no main manifest".
     - JAR_FILE=$(ls core/build/libs/vc-core-*.jar | grep -v -- '-plain' | head -1)
     - echo "Building ${VC_IMAGE} from ${JAR_FILE}"
     - docker build --pull -t ${VC_IMAGE} core
