@@ -118,6 +118,11 @@ SEC:core:
   cache:
     <<: *gradle-cache
     policy: pull
+  artifacts:
+    name: "vc-core-security-${CI_COMMIT_REF_NAME}-${CI_PIPELINE_ID}"
+    paths: [ "core/build/reports" ]
+    when: always
+    expire_in: 1 week
   needs: [ "BLD:core" ]
   rules:
     - if: '$VC_DEPCHECK_URL && $VC_DEPCHECK_USERNAME && $VC_DEPCHECK_PASSWORD'

@@ -119,6 +119,9 @@ subprojects {
     dependencyCheck {
       autoUpdate = false
       skipTestGroups = true
+      // developmentOnly never reaches the executable jar, so a finding there is
+      // about something that does not ship.
+      skipConfigurations = ["developmentOnly"]
       failBuildOnCVSS = 5
       failOnError = true
       suppressionFile = "${rootDir}/dependency-suppressions.xml"
