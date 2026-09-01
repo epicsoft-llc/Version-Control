@@ -1,0 +1,30 @@
+<nav class="navbar navbar-expand navbar-dark bg-dark">
+  <div class="container-fluid vc-content">
+    <span class="navbar-brand">{{ 'app.title' | translate }}</span>
+    <ul class="navbar-nav me-auto">
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/tasks" routerLinkActive="active">{{ 'nav.tasks' | translate }}</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/matrix" routerLinkActive="active">{{ 'nav.matrix' | translate }}</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/master-data" routerLinkActive="active">{{ 'nav.masterData' | translate }}</a>
+      </li>
+    </ul>
+    <div class="btn-group btn-group-sm">
+      @for (lang of langs; track lang) {
+        <button type="button"
+                class="btn"
+                [class.btn-light]="isCurrent(lang)"
+                [class.btn-outline-light]="!isCurrent(lang)"
+                (click)="switchLanguage(lang)">{{ lang | uppercase }}
+        </button>
+      }
+    </div>
+  </div>
+</nav>
+
+<main class="container-fluid vc-content py-4">
+  <router-outlet/>
+</main>

@@ -1,0 +1,13 @@
+/* Bootstrap carries the layout; this file holds only what it does not cover. */
+
+.vc-content {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.vc-matrix td,
+.vc-matrix th {
+  white-space: nowrap;
+  vertical-align: middle;
+}

@@ -1,0 +1,4 @@
+[tools]
+gradle = "9.7.1"
+java = "25+36"
+nodejs = "24"

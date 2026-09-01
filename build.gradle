@@ -1,0 +1,136 @@
+// ###########################################################
+// #### Update Gradle Wrapper:
+// #### ./gradlew wrapper --gradle-version 9.7.1
+// #### Update ".vfox.toml" as well
+// ###########################################################
+
+plugins {
+  id "idea"
+  id "jacoco"
+  alias(libs.plugins.epicsoft.deps.update)
+  alias(libs.plugins.dependency.check) apply false
+}
+
+group = "one.epicsoft.vc"
+version = "0.1.0"
+
+// ###########################################################
+// #### Dependency updates
+// #### ./gradlew checkDependencyUpdates
+// ###########################################################
+depsUpdate {
+  showAll = true
+  //// Fails the task when anything is behind — the CI job carries
+  //// allow_failure, so it surfaces as a warning without stopping the pipeline.
+  failOnUpdates = true
+  includePreRelease = false
+}
+
+subprojects {
+  apply plugin: "java"
+  apply plugin: "idea"
+  apply plugin: "jacoco"
+
+  group = rootProject.group
+  version = rootProject.version
+
+  idea {
+    module {
+      downloadSources = true
+      downloadJavadoc = true
+    }
+  }
+
+  tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.compilerArgs << "-parameters"
+  }
+
+  // ###########################################################
+  // #### Test
+  // #### Unit tests run everywhere. Tests tagged "integration"
+  // #### need Docker (Testcontainers) and are skipped without it,
+  // #### so `./gradlew test` stays green on a machine without it.
+  // ###########################################################
+  tasks.named("test") {
+    useJUnitPlatform {
+      if (!dockerAvailable()) {
+        excludeTags "integration"
+      }
+    }
+    systemProperty "file.encoding", "UTF-8"
+    testLogging.showStandardStreams = true
+    testLogging.exceptionFormat = "full"
+    finalizedBy("jacocoTestReport")
+  }
+
+  jacocoTestReport {
+    reports {
+      xml.required = true
+      html.required = true
+      csv.required = false
+    }
+  }
+
+  // ###########################################################
+  // #### OWASP dependency check — only when configured
+  // ####
+  // #### It reads a shared NVD database. Connection string, driver and
+  // #### credentials come from the environment and have no default here — not
+  // #### even the kind of database. Without them the plugin is not applied at
+  // #### all, so a contributor without access is never blocked.
+  // #### ./gradlew :core:dependencyCheckAnalyze
+  // ###########################################################
+  final def depcheckUrl = System.getenv("VC_DEPCHECK_URL")
+  final def depcheckDriver = System.getenv("VC_DEPCHECK_DRIVER")
+  final def depcheckUser = System.getenv("VC_DEPCHECK_USERNAME")
+  final def depcheckPass = System.getenv("VC_DEPCHECK_PASSWORD")
+  if (depcheckUrl && depcheckUser && depcheckPass) {
+    apply plugin: "org.owasp.dependencycheck"
+    dependencyCheck {
+      autoUpdate = false
+      skipTestGroups = true
+      failBuildOnCVSS = 5
+      failOnError = true
+      suppressionFile = "${rootDir}/dependency-suppressions.xml"
+      format = "ALL"
+      analyzers.assemblyEnabled = false
+      analyzers.retirejs.enabled = false
+      analyzers.nodeEnabled = false
+      analyzers.nodeAuditEnabled = false
+      data.connectionString = depcheckUrl
+      if (depcheckDriver) {
+        data.driver = depcheckDriver
+      }
+      data.username = depcheckUser
+      data.password = depcheckPass
+      nvd.validForHours = 99999
+    }
+  }
+
+  // ###########################################################
+  // #### Docker helper — the image build reads the jar name
+  // ###########################################################
+  tasks.register("showJarName") {
+    doLast {
+      println "${jar.archiveBaseName.orNull}-${jar.archiveVersion.orNull}.${jar.archiveExtension.orNull}"
+    }
+  }
+}
+
+/**
+ * True when a Docker daemon answers. Integration tests start a PostgreSQL
+ * container; without a daemon they are skipped rather than failing, so the
+ * project stays buildable for anyone.
+ */
+static boolean dockerAvailable() {
+  try {
+    final def process = new ProcessBuilder("docker", "info")
+      .redirectErrorStream(true)
+      .start()
+    process.inputStream.text
+    return process.waitFor() == 0
+  } catch (final Exception ignored) {
+    return false
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "nav.masterData": "Master data",
+  "nav.matrix": "Matrix",
+  "nav.tasks": "Tasks",
+  "app.title": "Version Control",
+  "masterData.empty": "No projects yet.",
+  "matrix.empty": "No components yet.",
+  "tasks.empty": "Nothing to do."
+}

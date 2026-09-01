@@ -1,0 +1,186 @@
+###############################################################################
+#### Branch / Tag | Meaning
+#### -------------|--------
+#### develop      | work in progress
+#### main         | released state
+#### X.Y.Z (Tag)  | release
+###############################################################################
+
+stages:
+  - build
+  - test
+  - license
+  - dependency
+  - security
+  - artifact
+
+variables:
+  VERSION: ${CI_COMMIT_REF_NAME}
+  GRADLE_OPTS: "-Dorg.gradle.console=plain -Dorg.gradle.daemon=false"
+  GRADLE_USER_HOME: "${CI_PROJECT_DIR}/.gradle"
+  JDK_IMAGE: eclipse-temurin:25-jdk
+  NODE_IMAGE: node:24-alpine
+  BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
+
+#### No pipeline for merge requests — the branch pipeline is the verification.
+workflow:
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+      when: never
+    - when: always
+
+.gradle-cache: &gradle-cache
+  key: vc-gradle-${CI_COMMIT_REF_SLUG}
+  paths: [ "${GRADLE_USER_HOME}/caches", "${GRADLE_USER_HOME}/wrapper" ]
+  policy: pull-push
+
+.node-cache: &node-cache
+  key: vc-node-${CI_COMMIT_REF_SLUG}
+  paths: [ "dashboard/node_modules" ]
+  policy: pull-push
+
+###############################################################################
+#### core (backend)
+###############################################################################
+BLD:core:
+  stage: build
+  image: ${JDK_IMAGE}
+  before_script:
+    - chmod +x gradlew
+  script:
+    - ./gradlew :core:clean :core:assemble -x test
+  cache: *gradle-cache
+  artifacts:
+    name: "vc-core-${CI_COMMIT_REF_NAME}-${CI_PIPELINE_ID}"
+    paths: [ "core/build" ]
+    expire_in: 1h
+  retry: 1
+
+TST:core:
+  stage: test
+  image: ${JDK_IMAGE}
+  services:
+    - name: docker:dind
+      alias: docker
+  variables:
+    #### Testcontainers talks to the dind service instead of a local socket.
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    TESTCONTAINERS_RYUK_DISABLED: "true"
+  before_script:
+    - chmod +x gradlew
+  script:
+    - ./gradlew :core:test
+  coverage: '/Total.*?([0-9]{1,3})%/'
+  cache: *gradle-cache
+  artifacts:
+    name: "vc-core-test-${CI_COMMIT_REF_NAME}-${CI_PIPELINE_ID}"
+    paths: [ "core/build/reports" ]
+    reports:
+      junit: core/build/test-results/test/TEST-*.xml
+    expire_in: 1h
+  needs: [ "BLD:core" ]
+  retry: 1
+
+#### Reports dependencies that are behind. The task fails when it finds any, and
+#### allow_failure turns that into a warning on the pipeline instead of a stop:
+#### an available update is something to look at, not a reason to block a merge —
+#### and a pipeline that goes red for it teaches people to ignore red.
+DEP:core:
+  stage: dependency
+  image: ${JDK_IMAGE}
+  before_script:
+    - chmod +x gradlew
+  script:
+    - ./gradlew checkDependencyUpdates
+  cache:
+    <<: *gradle-cache
+    policy: pull
+  needs: [ "BLD:core" ]
+  allow_failure: true
+
+#### OWASP dependency check against a shared NVD database. Connection, credentials
+#### and the runner tag come from CI variables only; without them the job does not
+#### run, so a fork or a contributor is never blocked by it — and nothing about
+#### that infrastructure is described in this repository.
+SEC:core:
+  stage: security
+  image: ${JDK_IMAGE}
+  before_script:
+    - chmod +x gradlew
+  script:
+    - ./gradlew :core:dependencyCheckAnalyze
+  cache:
+    <<: *gradle-cache
+    policy: pull
+  needs: [ "BLD:core" ]
+  rules:
+    - if: '$VC_DEPCHECK_URL && $VC_DEPCHECK_USERNAME && $VC_DEPCHECK_PASSWORD'
+  tags: [ "$VC_DEPCHECK_RUNNER_TAG" ]
+  allow_failure: true
+
+###############################################################################
+#### dashboard (frontend)
+###############################################################################
+BLD:dashboard:
+  stage: build
+  image: ${NODE_IMAGE}
+  before_script:
+    - cd dashboard
+  script:
+    - npm ci --no-audit --no-fund
+    #### Pull translations when a token is configured; otherwise the committed
+    #### files are shipped as they are.
+    - node scripts/i18n-pull.mjs
+    - npm run build
+  cache: *node-cache
+  artifacts:
+    name: "vc-dashboard-${CI_COMMIT_REF_NAME}-${CI_PIPELINE_ID}"
+    paths: [ "dashboard/dist" ]
+    expire_in: 1h
+  retry: 1
+
+###############################################################################
+#### Images
+###############################################################################
+.image: &image
+  stage: artifact
+  image: docker:dind
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u gitlab-ci-token -p ${CI_JOB_TOKEN} ${CI_REGISTRY}
+  after_script:
+    - docker logout ${CI_REGISTRY}
+    - rm -f /root/.docker/config.json
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+    - if: '$CI_COMMIT_REF_NAME == "develop"'
+    - if: '$CI_COMMIT_TAG =~ /^\d+\.\d+\.\d+(?:\.\d+)?$/'
+  tags: [ "image" ]
+  retry: 1
+
+IMG:core:
+  <<: *image
+  variables:
+    VC_IMAGE: ${CI_REGISTRY_IMAGE}:vc-core-${VERSION}
+  script:
+    - JAR_FILE=$(ls core/build/libs/vc-core-*.jar | head -1)
+    - echo "Building ${VC_IMAGE} from ${JAR_FILE}"
+    - docker build --pull -t ${VC_IMAGE} core
+      --build-arg APP_VERSION=${VERSION}
+      --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+      --build-arg JAR_FILE=$(basename ${JAR_FILE} | sed 's|^|build/libs/|')
+    - docker push ${VC_IMAGE}
+  needs: [ "BLD:core" ]
+
+IMG:dashboard:
+  <<: *image
+  variables:
+    VC_IMAGE: ${CI_REGISTRY_IMAGE}:vc-dashboard-${VERSION}
+  script:
+    - docker build --pull -t ${VC_IMAGE} dashboard
+      --build-arg APP_VERSION=${VERSION}
+      --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+    - docker push ${VC_IMAGE}
+  needs: [ "BLD:dashboard" ]

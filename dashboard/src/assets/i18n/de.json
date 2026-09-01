@@ -1,0 +1,9 @@
+{
+  "nav.masterData": "Stammdaten",
+  "nav.matrix": "Matrix",
+  "nav.tasks": "Aufgaben",
+  "app.title": "Versionsübersicht",
+  "masterData.empty": "Noch keine Projekte.",
+  "matrix.empty": "Noch keine Komponenten.",
+  "tasks.empty": "Nichts zu tun."
+}

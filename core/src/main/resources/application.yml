@@ -1,0 +1,83 @@
+################################################################################
+#### Version Control — backend configuration
+####
+#### Values that only ever come from the environment carry the literal
+#### USE_ENV. The real value arrives as an environment variable through Spring's
+#### relaxed binding (VC_GITHUB_TOKEN -> vc.github.token). Never put a secret,
+#### and never put a working default, into this file.
+####
+#### Every consumer must treat USE_ENV exactly like a missing value — see
+#### VcUtil.isConfigured(). Without that check the application calls the
+#### upstream API with the literal "USE_ENV" as its token on every request.
+################################################################################
+vc:
+  i18n:
+    langs: en,de
+    default-lang: en
+  github:
+    #### Optional. Without a token the update check keeps working at the lower
+    #### rate limit (60 requests/hour instead of 5.000).
+    token: USE_ENV
+  telegram:
+    #### Optional. Without a token the daily notification is not sent at all.
+    bot-token: USE_ENV
+    chat-id: USE_ENV
+  scheduler:
+    tick-interval: 15m
+  check:
+    default-interval: 48h
+    #### Hard lower bound, applies to manually triggered checks and to the rule
+    #### preview as well — an exception here is the path by which it gets bypassed.
+    min-interval: 48h
+    jitter: 2h
+    backoff: 1h,4h,12h
+    error-grace-days: 3
+  eol:
+    check-interval: 7d
+    warn-months: 6
+    escalate-months: 3
+  notification:
+    daily-time: "08:00"
+
+spring:
+  application:
+    name: vc-core
+  datasource:
+    url: jdbc:postgresql://${VC_DATABASE_HOST:localhost}:${VC_DATABASE_PORT:5432}/${VC_DATABASE_NAME:versioncontrol}
+    username: ${VC_DATABASE_USERNAME:USE_ENV}
+    password: ${VC_DATABASE_PASSWORD:USE_ENV}
+  jpa:
+    hibernate:
+      #### The schema belongs to Flyway, never to Hibernate.
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: 8080
+
+management:
+  #### Actuator on a port of its own, so the health endpoint is reachable for the
+  #### container check without being exposed together with the API.
+  server:
+    port: 8090
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  level:
+    one.epicsoft.vc: INFO
