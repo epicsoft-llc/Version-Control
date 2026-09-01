@@ -124,10 +124,16 @@ SEC:core:
 ###############################################################################
 #### dashboard (frontend)
 ###############################################################################
+#### A mirror that requires authentication needs more than a registry URL: npm
+#### sends no credentials for a bare NPM_CONFIG_REGISTRY and the mirror answers
+#### 403. VC_NPMRC is a *file* type CI variable holding a complete .npmrc —
+#### registry line plus credentials. Without it npm goes to npmjs.org directly,
+#### which is what a fork or an outside contributor gets.
 BLD:dashboard:
   stage: build
   image: ${NODE_IMAGE}
   before_script:
+    - if [ -n "$VC_NPMRC" ]; then cp "$VC_NPMRC" "$HOME/.npmrc"; fi
     - cd dashboard
   script:
     - npm ci --no-audit --no-fund

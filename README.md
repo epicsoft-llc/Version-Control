@@ -95,8 +95,17 @@ calling an upstream API with the word `USE_ENV` as its token.
 
 The build resolves from Maven Central, the Gradle Plugin Portal and npm. To route it through a mirror,
 set `VC_MAVEN_MIRROR_URL`, `VC_GRADLE_PLUGIN_MIRROR_URL` (optionally `VC_MAVEN_MIRROR_USERNAME` and
-`VC_MAVEN_MIRROR_PASSWORD`) for Gradle, and `NPM_CONFIG_REGISTRY` or a local `.npmrc` for npm. Nothing
-about a mirror is stored in this repository.
+`VC_MAVEN_MIRROR_PASSWORD`) for Gradle. For npm use an `.npmrc` — in your home directory, or in
+`dashboard/`, where it is ignored by git. A mirror that requires authentication needs one: a bare
+`NPM_CONFIG_REGISTRY` carries no credentials and such a mirror answers `403 Forbidden`.
+
+```
+registry=https://mirror.example.com/repository/npm-group/
+//mirror.example.com/repository/npm-group/:username=<user>
+//mirror.example.com/repository/npm-group/:_password=<base64 of the password>
+```
+
+Nothing about a mirror is stored in this repository.
 
 ## License
 
