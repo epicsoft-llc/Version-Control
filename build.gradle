@@ -79,10 +79,23 @@ subprojects {
   // ###########################################################
   final def depcheckUrl = System.getenv("VC_DEPCHECK_URL")
   final def depcheckDriver = System.getenv("VC_DEPCHECK_DRIVER")
+  final def depcheckDriverJar = System.getenv("VC_DEPCHECK_DRIVER_JAR")
   final def depcheckUser = System.getenv("VC_DEPCHECK_USERNAME")
   final def depcheckPass = System.getenv("VC_DEPCHECK_PASSWORD")
   if (depcheckUrl && depcheckUser && depcheckPass) {
     apply plugin: "org.owasp.dependencycheck"
+
+    // The plugin loads the JDBC driver from a jar of its own, not from the build
+    // classpath — naming the class alone ends in "Analysis failed". The
+    // coordinate comes from the environment, so no driver jar lives in this
+    // repository and the kind of database stays out of it.
+    String depcheckDriverPath = null
+    if (depcheckDriverJar) {
+      final def driverDependency = dependencies.create(depcheckDriverJar)
+      driverDependency.transitive = false
+      depcheckDriverPath = configurations.detachedConfiguration(driverDependency).singleFile.absolutePath
+    }
+
     dependencyCheck {
       autoUpdate = false
       skipTestGroups = true
@@ -98,9 +111,14 @@ subprojects {
       if (depcheckDriver) {
         data.driver = depcheckDriver
       }
+      if (depcheckDriverPath) {
+        data.driverPath = depcheckDriverPath
+      }
       data.username = depcheckUser
       data.password = depcheckPass
+      // The shared database is kept current elsewhere; this build only reads it.
       nvd.validForHours = 99999
+      nvd.endpoint = ""
     }
   }
 

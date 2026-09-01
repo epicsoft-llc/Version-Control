@@ -52,7 +52,7 @@ each group is all-or-nothing — set every variable in it or none.
 | Group | Variables | Without them |
 |---|---|---|
 | Translations | `VC_TOLGEE_API_KEY`, `VC_TOLGEE_URL`, `VC_TOLGEE_PROJECT_ID` | the committed translation files are shipped as they are |
-| Vulnerability scan | `VC_DEPCHECK_URL`, `VC_DEPCHECK_USERNAME`, `VC_DEPCHECK_PASSWORD`, `VC_DEPCHECK_RUNNER_TAG`, optionally `VC_DEPCHECK_DRIVER` | the job does not run |
+| Vulnerability scan | `VC_DEPCHECK_URL`, `VC_DEPCHECK_USERNAME`, `VC_DEPCHECK_PASSWORD`, `VC_DEPCHECK_RUNNER_TAG`, `VC_DEPCHECK_DRIVER`, `VC_DEPCHECK_DRIVER_JAR` | the job does not run |
 | Package mirror | `VC_MAVEN_MIRROR_URL`, `VC_GRADLE_PLUGIN_MIRROR_URL`, `VC_MAVEN_MIRROR_USERNAME`, `VC_MAVEN_MIRROR_PASSWORD`, `VC_NPM_REGISTRY`, `VC_NPM_USERNAME`, `VC_NPM_PASSWORD` | Maven Central, the Gradle Plugin Portal and npm are used directly |
 
 Mask every credential. Do **not** mark them *protected* unless the branch is protected too — a protected

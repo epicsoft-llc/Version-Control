@@ -42,7 +42,9 @@ async function fetchLanguage(lang) {
     + `?languages=${encodeURIComponent(lang)}&format=JSON&zip=false&structureDelimiter=&filterTag=${encodeURIComponent(tag)}`;
   const response = await fetch(exportUrl, {headers: {Accept: 'application/json', 'X-API-Key': token}});
   if (!response.ok) {
-    throw new Error(`export failed for '${lang}': HTTP ${response.status} ${response.statusText}`);
+    // Tolgee names the reason in the body; without it the status alone says nothing.
+    const detail = (await response.text().catch(() => '')).trim().slice(0, 300);
+    throw new Error(`export failed for '${lang}': HTTP ${response.status} ${response.statusText} ${detail}`);
   }
   const json = await response.json();
   const keys = Object.keys(json);
