@@ -8,11 +8,14 @@ import {catchError, forkJoin, of, Subscription} from 'rxjs';
 import {ComponentDto} from '../../repositories/dto/component.dto';
 import {ComponentEnvironmentDto, ComponentEnvironmentRequest} from '../../repositories/dto/component-environment.dto';
 import {EnvironmentDto} from '../../repositories/dto/environment.dto';
+import {EolStatusDto} from '../../repositories/dto/eol-status.dto';
 import {UpdateCheckDto} from '../../repositories/dto/update-check.dto';
+import {UpgradeProposalDto} from '../../repositories/dto/upgrade.dto';
 import {VersionChangeDto} from '../../repositories/dto/version-change.dto';
 import {ComponentRepo} from '../../repositories/api/component.repo';
 import {ComponentEnvironmentRepo} from '../../repositories/api/component-environment.repo';
 import {EnvironmentRepo} from '../../repositories/api/environment.repo';
+import {EolStatusRepo} from '../../repositories/api/eol-status.repo';
 import {UpdateCheckRepo} from '../../repositories/api/update-check.repo';
 import {VersionChangeRepo} from '../../repositories/api/version-change.repo';
 import {VersionChangeDialogComponent} from '../../components/version-change-dialog/version-change-dialog.component';
@@ -46,6 +49,7 @@ export class ComponentDetailComponent implements OnDestroy {
   private readonly componentEnvironmentRepo: ComponentEnvironmentRepo = inject(ComponentEnvironmentRepo);
   private readonly versionChangeRepo: VersionChangeRepo = inject(VersionChangeRepo);
   private readonly updateCheckRepo: UpdateCheckRepo = inject(UpdateCheckRepo);
+  private readonly eolStatusRepo: EolStatusRepo = inject(EolStatusRepo);
   private readonly modal: NgbModal = inject(NgbModal);
   private readonly subs: Subscription[] = [];
 
@@ -58,7 +62,10 @@ export class ComponentDetailComponent implements OnDestroy {
   protected rows: EnvironmentRow[] = [];
   protected history: VersionChangeDto[] = [];
   protected check?: UpdateCheckDto;
+  protected eol?: EolStatusDto;
+  protected proposals: UpgradeProposalDto[] = [];
   protected checking = false;
+  protected checkingEol = false;
   protected loading = true;
   protected errorMessage?: string;
 
@@ -138,6 +145,28 @@ export class ComponentDetailComponent implements OnDestroy {
     }));
   }
 
+  /**
+   * Asks the end-of-life database now. Its own cycle and its own bound: the
+   * server refuses a second lookup inside the weekly interval.
+   */
+  protected checkEolNow(): void {
+    if (!isDefined(this.component) || this.checkingEol) {
+      return;
+    }
+    this.checkingEol = true;
+    this.errorMessage = undefined;
+    this.subs.push(this.eolStatusRepo.checkNow(this.component.id).subscribe({
+      next: (statuses) => {
+        this.eol = statuses.at(0);
+        this.checkingEol = false;
+      },
+      error: (error: HttpErrorResponse) => {
+        this.checkingEol = false;
+        this.showError(error);
+      }
+    }));
+  }
+
   private load(): void {
     if (!isDefined(this.componentId)) {
       return;
@@ -159,12 +188,16 @@ export class ComponentDetailComponent implements OnDestroy {
       // Caught here, not by the shared handler: the check block is extra
       // information, and losing it must not take the name, the environments and
       // the whole history down with it.
-      checks: this.updateCheckRepo.findAllByComponent(component.id).pipe(catchError(() => of([])))
+      checks: this.updateCheckRepo.findAllByComponent(component.id).pipe(catchError(() => of([]))),
+      eol: this.eolStatusRepo.findAllByComponent(component.id).pipe(catchError(() => of([]))),
+      proposals: this.componentRepo.getProposals(component.id).pipe(catchError(() => of([])))
     }).subscribe({
       next: (loaded) => {
         // Never checked is an empty list, not an error: it is the state every
         // component starts in.
         this.check = loaded.checks.at(0);
+        this.eol = loaded.eol.at(0);
+        this.proposals = loaded.proposals;
         this.rows = loaded.environments.map((environment) => new EnvironmentRow({
           environment: environment,
           cell: loaded.cells.find((cell) => cell.environmentId === environment.id)
@@ -185,6 +218,8 @@ export class ComponentDetailComponent implements OnDestroy {
     this.rows = [];
     this.history = [];
     this.check = undefined;
+    this.eol = undefined;
+    this.proposals = [];
     this.loading = false;
     this.showError(error);
   }

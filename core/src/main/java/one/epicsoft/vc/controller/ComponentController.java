@@ -5,7 +5,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import one.epicsoft.vc.dto.ComponentDto;
 import one.epicsoft.vc.dto.ComponentRequest;
+import one.epicsoft.vc.dto.UpgradeProposalDto;
 import one.epicsoft.vc.facade.ComponentFacade;
+import one.epicsoft.vc.facade.UpgradeProposalFacade;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -31,6 +33,7 @@ public class ComponentController {
   public static final String PATH_PREFIX = "api/v1/components";
 
   private final ComponentFacade componentFacade;
+  private final UpgradeProposalFacade upgradeProposalFacade;
 
   @GetMapping(consumes = MediaType.ALL_VALUE)
   public ResponseEntity<List<ComponentDto>> findAllByProject(@RequestParam final UUID projectId) {
@@ -42,6 +45,16 @@ public class ComponentController {
   public ResponseEntity<ComponentDto> getById(@PathVariable final UUID id) {
     log.debug("Incoming GET 'api/v1/components/{}'", id);
     return ResponseEntity.ok(this.componentFacade.getById(id));
+  }
+
+  /**
+   * What to do next in each environment: the permissible target, the note about a
+   * larger jump, the versions that cannot be skipped, and what to read first.
+   */
+  @GetMapping(path = "/{id}/proposals", consumes = MediaType.ALL_VALUE)
+  public ResponseEntity<List<UpgradeProposalDto>> getProposals(@PathVariable final UUID id) {
+    log.debug("Incoming GET proposals for component {}", id);
+    return ResponseEntity.ok(this.upgradeProposalFacade.getByComponent(id));
   }
 
   @PostMapping

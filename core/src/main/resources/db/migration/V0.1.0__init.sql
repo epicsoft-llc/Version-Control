@@ -223,3 +223,40 @@ CREATE TABLE update_decision
     CONSTRAINT FK_update_decision_component FOREIGN KEY (component_id) REFERENCES component (id) ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX UQ_update_decision_component ON update_decision (component_id);
+
+-- Mandatory intermediate versions on the upgrade path. Not a rule engine: facts
+-- somebody looked up once, shown with every proposal after that.
+CREATE TABLE upgrade_stop
+(
+    id           UUID         NOT NULL,
+    component_id UUID         NOT NULL,
+    version      VARCHAR(200) NOT NULL,
+    note         TEXT,
+    created      TIMESTAMP(6) NOT NULL,
+    updated      TIMESTAMP(6),
+    CONSTRAINT PK_upgrade_stop PRIMARY KEY (id),
+    CONSTRAINT FK_upgrade_stop_component FOREIGN KEY (component_id) REFERENCES component (id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX UQ_upgrade_stop_component_version ON upgrade_stop (component_id, version);
+
+-- The result of the end-of-life lookup, deliberately separate from update_check:
+-- its own cycle, its own error state, its own thresholds. An end of support has a
+-- deadline and does not go away by postponing it.
+CREATE TABLE eol_status
+(
+    id              UUID         NOT NULL,
+    component_id    UUID         NOT NULL,
+    eol_date        DATE,
+    supported_until DATE,
+    eol             BOOLEAN      NOT NULL,
+    checked_at      TIMESTAMP(6) NOT NULL,
+    next_check_due  TIMESTAMP(6),
+    check_state     VARCHAR(32)  NOT NULL,
+    error_message   TEXT,
+    created         TIMESTAMP(6) NOT NULL,
+    updated         TIMESTAMP(6),
+    CONSTRAINT PK_eol_status PRIMARY KEY (id),
+    CONSTRAINT FK_eol_status_component FOREIGN KEY (component_id) REFERENCES component (id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX UQ_eol_status_component ON eol_status (component_id);
+CREATE INDEX IX_eol_status_next_check_due ON eol_status (next_check_due);

@@ -113,4 +113,12 @@ public class ComponentRequest {
   @Valid
   @JsonProperty("packages")
   private List<ComponentPackageRequest> packages;
+
+  /**
+   * Versions that cannot be skipped on the way up. Omitted leaves the stored ones
+   * alone, an empty list clears them — the same shape as the package list.
+   */
+  @Nullable
+  @JsonProperty("upgradeStops")
+  private List<@Valid UpgradeStopRequest> upgradeStops;
 }

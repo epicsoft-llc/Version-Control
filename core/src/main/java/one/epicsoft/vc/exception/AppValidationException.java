@@ -37,6 +37,13 @@ public class AppValidationException extends AppException {
     return new AppValidationException("Package '%s' is listed twice".formatted(name), "error.duplicatePackage");
   }
 
+  /** Two stops on the same version would reach the unique index as a 500. */
+  @Nonnull
+  public static AppValidationException duplicateUpgradeStop(@Nonnull final String version) {
+    return new AppValidationException("Version '%s' is listed twice as an upgrade stop".formatted(version),
+                                      "error.duplicateUpgradeStop");
+  }
+
   @Nonnull
   public static AppValidationException unknownPackage(@Nonnull final String name) {
     return new AppValidationException("Package '%s' is not configured for this component".formatted(name),

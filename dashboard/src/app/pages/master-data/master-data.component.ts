@@ -9,11 +9,23 @@ import {EnvironmentDto, EnvironmentRequest} from '../../repositories/dto/environ
 import {ComponentDto, ComponentPackageRequest, ComponentRequest} from '../../repositories/dto/component.dto';
 import {MAX_STEPS, SOURCE_TYPES, VERSION_STRATEGIES} from '../../repositories/dto/enums.dto';
 import {VersionPreviewDto, VersionPreviewRequest} from '../../repositories/dto/update-check.dto';
+import {UpgradeStopRequest} from '../../repositories/dto/upgrade.dto';
 import {ProjectRepo} from '../../repositories/api/project.repo';
 import {EnvironmentRepo} from '../../repositories/api/environment.repo';
 import {ComponentRepo} from '../../repositories/api/component.repo';
 import {UpdateCheckRepo} from '../../repositories/api/update-check.repo';
 import {isDefined, nonBlank, notDefined, unsubscribe} from '../../libs/utils/vc.utils';
+
+/** One row of the stop editor: a version that cannot be skipped, and why. */
+export class StopRow {
+
+  public version = '';
+  public note = '';
+
+  constructor(init?: Partial<StopRow>) {
+    Object.assign(this, init);
+  }
+}
 
 /** One row of the package editor: a name, an order and the leading flag. */
 export class PackageRow {
@@ -70,6 +82,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
   protected componentForm?: ComponentRequest;
   protected componentFormId?: string;
   protected packageRows: PackageRow[] = [];
+  protected stopRows: StopRow[] = [];
   protected preview?: VersionPreviewDto;
   protected previewing = false;
 
@@ -208,6 +221,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
       checkEnabled: true
     });
     this.packageRows = [];
+    this.stopRows = [];
   }
 
   protected editComponent(component: ComponentDto): void {
@@ -238,6 +252,10 @@ export class MasterDataComponent implements OnInit, OnDestroy {
       name: entry.name,
       leadingPackage: entry.leadingPackage
     }));
+    this.stopRows = component.upgradeStops.map((entry) => new StopRow({
+      version: entry.version,
+      note: entry.note ?? ''
+    }));
   }
 
   protected saveComponent(): void {
@@ -258,6 +276,13 @@ export class MasterDataComponent implements OnInit, OnDestroy {
                                leadingPackage: row.leadingPackage
                              }))
                        : [];
+    // Always sent, so removing the last stop actually removes it.
+    request.upgradeStops = this.stopRows
+                               .filter((row) => nonBlank(row.version))
+                               .map((row) => new UpgradeStopRequest({
+                                 version: row.version.trim(),
+                                 note: nonBlank(row.note) ? row.note.trim() : undefined
+                               }));
     const call: Observable<ComponentDto> = isDefined(this.componentFormId)
                                            ? this.componentRepo.update(this.componentFormId, request)
                                            : this.componentRepo.create(request);
@@ -312,6 +337,14 @@ export class MasterDataComponent implements OnInit, OnDestroy {
     }));
   }
 
+  protected addStopRow(): void {
+    this.stopRows.push(new StopRow());
+  }
+
+  protected removeStopRow(index: number): void {
+    this.stopRows.splice(index, 1);
+  }
+
   protected addPackageRow(): void {
     this.packageRows.push(new PackageRow({leadingPackage: this.packageRows.length === 0}));
   }
@@ -343,6 +376,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
     this.componentForm = undefined;
     this.componentFormId = undefined;
     this.packageRows = [];
+    this.stopRows = [];
     this.preview = undefined;
     this.errorMessage = undefined;
   }

@@ -7,14 +7,18 @@ import lombok.extern.slf4j.Slf4j;
 import one.epicsoft.vc.dto.ComponentDto;
 import one.epicsoft.vc.dto.ComponentPackageRequest;
 import one.epicsoft.vc.dto.ComponentRequest;
+import one.epicsoft.vc.dto.UpgradeStopRequest;
 import one.epicsoft.vc.exception.AppConflictException;
 import one.epicsoft.vc.exception.AppValidationException;
 import one.epicsoft.vc.jpa.entity.ComponentEntity;
 import one.epicsoft.vc.jpa.entity.ComponentPackageEntity;
+import one.epicsoft.vc.jpa.entity.UpgradeStopEntity;
 import one.epicsoft.vc.jpa.entity.ProjectEntity;
 import one.epicsoft.vc.mapper.ComponentMapper;
+import one.epicsoft.vc.mapper.UpgradeStopMapper;
 import one.epicsoft.vc.service.ComponentEnvironmentService;
 import one.epicsoft.vc.service.ComponentService;
+import one.epicsoft.vc.service.UpgradeStopService;
 import one.epicsoft.vc.service.ProjectService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +32,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.isNull;
+import static one.epicsoft.vc.util.VcUtil.nonBlank;
 import static java.util.Objects.nonNull;
 import static one.epicsoft.vc.util.VcUtil.nonEquals;
 
@@ -40,6 +45,8 @@ public class ComponentFacade {
   private final ProjectService projectService;
   private final ComponentEnvironmentService componentEnvironmentService;
   private final ComponentMapper componentMapper;
+  private final UpgradeStopService upgradeStopService;
+  private final UpgradeStopMapper upgradeStopMapper;
 
   @Nonnull
   @Transactional(readOnly = true, rollbackFor = Throwable.class)
@@ -62,8 +69,10 @@ public class ComponentFacade {
     }
     final ComponentEntity entity = new ComponentEntity();
     this.componentMapper.updateEntity(entity, request);
+    normalise(entity);
     entity.setProject(project);
     final ComponentEntity saved = this.componentService.save(entity);
+    this.applyUpgradeStops(saved, request.getUpgradeStops());
     this.applyPackages(saved, request.getPackages());
     return this.toDtos(List.of(saved)).getFirst();
   }
@@ -81,7 +90,9 @@ public class ComponentFacade {
       throw AppConflictException.duplicateName("Component", request.getName());
     }
     this.componentMapper.updateEntity(entity, request);
+    normalise(entity);
     final ComponentEntity saved = this.componentService.save(entity);
+    this.applyUpgradeStops(saved, request.getUpgradeStops());
     this.applyPackages(saved, request.getPackages());
     return this.toDtos(List.of(saved)).getFirst();
   }
@@ -124,6 +135,45 @@ public class ComponentFacade {
   }
 
   /**
+   * Null leaves the stored stops alone, a list replaces them — same shape as the
+   * package list, because they are edited in the same form.
+   */
+  /**
+   * A cleared text field arrives as an empty string, and an empty string is not
+   * a product. Left as it is, the end-of-life job would pick this component on
+   * every tick, do nothing, write no row — and no other component would ever be
+   * looked up again.
+   */
+  private static void normalise(@Nonnull final ComponentEntity component) {
+    if (!nonBlank(component.getEolProduct())) {
+      component.setEolProduct(null);
+    }
+    if (!nonBlank(component.getEolCycle())) {
+      component.setEolCycle(null);
+    }
+  }
+
+  private void applyUpgradeStops(@Nonnull final ComponentEntity component,
+                                 @Nullable final List<UpgradeStopRequest> requested) {
+    if (isNull(requested)) {
+      return;
+    }
+    final List<UpgradeStopEntity> stops = new ArrayList<>();
+    final Set<String> versions = new HashSet<>();
+    for (final UpgradeStopRequest entry : requested) {
+      if (!versions.add(entry.getVersion())) {
+        // Otherwise this reaches the unique index and answers 500.
+        throw AppValidationException.duplicateUpgradeStop(entry.getVersion());
+      }
+      final UpgradeStopEntity stop = new UpgradeStopEntity();
+      stop.setVersion(entry.getVersion());
+      stop.setNote(entry.getNote());
+      stops.add(stop);
+    }
+    this.upgradeStopService.replaceStops(component, stops);
+  }
+
+  /**
    * The matrix cell of a multi package component shows the leading one, and the
    * version dialog writes it there. Without a package carrying the flag the cell
    * would stay empty for good, however many versions are recorded — so the first
@@ -145,9 +195,14 @@ public class ComponentFacade {
         this.componentService.findPackages(entities.stream().map(ComponentEntity::getId).toList()).stream()
             .collect(Collectors.groupingBy(ComponentPackageEntity::getComponentId));
 
+    final Map<UUID, List<UpgradeStopEntity>> stops =
+        this.upgradeStopService.findAllByComponents(entities.stream().map(ComponentEntity::getId).toList()).stream()
+            .collect(Collectors.groupingBy(UpgradeStopEntity::getComponentId));
+
     return entities.stream().map(entity -> {
       final ComponentDto dto = this.componentMapper.toDto(entity);
       dto.setPackages(this.componentMapper.toPackageDtos(packages.getOrDefault(entity.getId(), List.of())));
+      dto.setUpgradeStops(this.upgradeStopMapper.toDtos(stops.getOrDefault(entity.getId(), List.of())));
       return dto;
     }).toList();
   }

@@ -37,4 +37,21 @@ public interface ComponentRepository extends JpaRepository<ComponentEntity, UUID
       ORDER BY c.nextCheckDue ASC NULLS FIRST
       """)
   List<ComponentEntity> findDue(@Nonnull @Param("now") Instant now, @Nonnull Pageable pageable);
+
+  /**
+   * Components that name an end-of-life product but were never looked up.
+   *
+   * <p>Separate from the due query above: the first lookup has to happen before
+   * a status row exists, and joining that case into the due query would mean no
+   * component is ever asked about a first time.
+   */
+  @Query("""
+      SELECT c FROM ComponentEntity c
+      WHERE c.deleted IS NULL
+        AND c.eolProduct IS NOT NULL
+        AND TRIM(c.eolProduct) <> ''
+        AND NOT EXISTS (SELECT 1 FROM EolStatusEntity es WHERE es.componentId = c.id)
+      ORDER BY c.name ASC
+      """)
+  List<ComponentEntity> findWithoutEolStatus(@Nonnull Pageable pageable);
 }

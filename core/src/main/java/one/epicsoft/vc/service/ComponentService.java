@@ -59,6 +59,12 @@ public class ComponentService {
     return this.componentRepository.findDue(now, PageRequest.of(0, limit));
   }
 
+  /** Components that name an end-of-life product and were never looked up. */
+  @Nonnull
+  public List<ComponentEntity> findWithoutEolStatus(final int limit) {
+    return this.componentRepository.findWithoutEolStatus(PageRequest.of(0, limit));
+  }
+
   @Nonnull
   public List<ComponentPackageEntity> findPackages(@Nonnull final UUID componentId) {
     return this.componentPackageRepository.findAllByComponentIdOrderBySortOrderAscNameAsc(componentId);

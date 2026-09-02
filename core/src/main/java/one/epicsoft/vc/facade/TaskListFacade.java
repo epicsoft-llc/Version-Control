@@ -5,6 +5,7 @@ import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import one.epicsoft.vc.config.CheckProperties;
+import one.epicsoft.vc.config.EolProperties;
 import one.epicsoft.vc.dto.TaskEntryDto;
 import one.epicsoft.vc.dto.TaskListDto;
 import one.epicsoft.vc.dto.TaskSectionDto;
@@ -13,17 +14,23 @@ import one.epicsoft.vc.enums.DecisionState;
 import one.epicsoft.vc.enums.TaskSection;
 import one.epicsoft.vc.jpa.entity.ComponentEntity;
 import one.epicsoft.vc.jpa.entity.ComponentEnvironmentEntity;
+import one.epicsoft.vc.jpa.entity.EolStatusEntity;
 import one.epicsoft.vc.jpa.entity.UpdateCheckEntity;
 import one.epicsoft.vc.jpa.entity.UpdateDecisionEntity;
 import one.epicsoft.vc.service.ComponentEnvironmentService;
 import one.epicsoft.vc.service.ComponentService;
+import one.epicsoft.vc.service.EolStatusService;
 import one.epicsoft.vc.service.ProjectService;
 import one.epicsoft.vc.service.UpdateCheckService;
 import one.epicsoft.vc.service.UpdateDecisionService;
+import one.epicsoft.vc.version.AllowedCandidates;
+import one.epicsoft.vc.version.UpgradePathCalculator;
+import one.epicsoft.vc.version.UpgradeTarget;
 import one.epicsoft.vc.version.VersionComparison;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -65,7 +72,11 @@ public class TaskListFacade {
   private final ComponentEnvironmentService componentEnvironmentService;
   private final UpdateCheckService updateCheckService;
   private final UpdateDecisionService updateDecisionService;
+  private final EolStatusService eolStatusService;
   private final CheckProperties checkProperties;
+  private final EolProperties eolProperties;
+  private final UpgradePathCalculator upgradePathCalculator;
+  private final AllowedCandidates allowedCandidates;
 
   @Nonnull
   @Transactional(readOnly = true, rollbackFor = Throwable.class)
@@ -81,6 +92,9 @@ public class TaskListFacade {
     final Map<UUID, UpdateDecisionEntity> decisions =
         this.updateDecisionService.findAllByProject(projectId).stream()
             .collect(Collectors.toMap(UpdateDecisionEntity::getComponentId, Function.identity()));
+    final Map<UUID, EolStatusEntity> eolStatuses =
+        this.eolStatusService.findAllByProject(projectId).stream()
+            .collect(Collectors.toMap(EolStatusEntity::getComponentId, Function.identity()));
     final Map<UUID, List<ComponentEnvironmentEntity>> cells =
         this.componentEnvironmentService.findAllByProject(projectId).stream()
             .collect(Collectors.groupingBy(ComponentEnvironmentEntity::getComponentId));
@@ -91,6 +105,7 @@ public class TaskListFacade {
       final UpdateDecisionEntity decision = decisions.get(component.getId());
       final List<ComponentEnvironmentEntity> componentCells = cells.getOrDefault(component.getId(), List.of());
 
+      this.addEolTask(entries, component, eolStatuses.get(component.getId()));
       this.addUpdateTask(entries, component, check, decision, componentCells);
       this.addCheckError(entries, component, check);
       addMovingTags(entries, component, componentCells);
@@ -105,6 +120,38 @@ public class TaskListFacade {
                          .map(section -> section(section, entries.get(section)))
                          .toList());
     return list;
+  }
+
+  /**
+   * The end of support, in one of two sections depending on how close it is.
+   *
+   * <p>Nothing here consults a decision. An end of support has a deadline; being
+   * postponed is exactly what it cannot be, and a snooze that silenced it would
+   * be the most expensive button in the application.
+   */
+  private void addEolTask(@Nonnull final Map<TaskSection, List<TaskEntryDto>> entries,
+                          @Nonnull final ComponentEntity component,
+                          @Nullable final EolStatusEntity status) {
+    // Not tied to a successful lookup. The dates of the last good answer are
+    // kept on failure on purpose, and a deadline that was known yesterday does
+    // not stop existing because a request failed today — dropping the entry
+    // would take an out-of-support component off the start page entirely.
+    if (isNull(status)) {
+      return;
+    }
+    final LocalDate end = status.getEolDate();
+    final boolean over = status.isEol() || (nonNull(end) && !end.isAfter(LocalDate.now()));
+    final boolean escalate = nonNull(end)
+                             && end.isBefore(LocalDate.now().plusMonths(this.eolProperties.getEscalateMonths()));
+    final boolean warn = nonNull(end)
+                         && end.isBefore(LocalDate.now().plusMonths(this.eolProperties.getWarnMonths()));
+    if (!over && !escalate && !warn) {
+      return;
+    }
+
+    final TaskEntryDto entry = entry(component, null, null, null);
+    entry.setDetail(nonNull(end) ? end.toString() : null);
+    add(entries, over || escalate ? TaskSection.EOL_EXCEEDED : TaskSection.EOL_WARNING, entry);
   }
 
   /**
@@ -144,8 +191,23 @@ public class TaskListFacade {
                            .thenComparing(cell -> cell.getEnvironment().getSortOrder())
                            .thenComparing(cell -> cell.getEnvironment().getName()))
          .forEach(cell -> {
+           // What the reader is shown is the next permissible target, not the
+           // newest version. The stored candidates are what the source offered,
+           // unfiltered, so they go through the rule first — otherwise a
+           // proposal names a variant or a prerelease that the check itself
+           // would never have reported.
+           final UpgradeTarget target = this.upgradePathCalculator.calculate(
+               cell.getCurrentVersion(),
+               this.allowedCandidates.of(component, check, cell.getCurrentVersion()),
+               component.getMaxStep(),
+               component.getVersionStrategy());
+           if (!target.hasTarget()) {
+             // Everything available is past the limit, or updates are switched
+             // off: shown on the component, never demanded here.
+             return;
+           }
            final TaskEntryDto entry = entry(component, cell.getEnvironment().getName(), cell.getCurrentVersion(),
-                                            check.getLatestVersion());
+                                            target.target());
            entry.setDetail(nonNull(decision) ? decision.getNote() : null);
            // The postponement date where there is one, otherwise how long the
            // update has been available. Blank exactly where there is most

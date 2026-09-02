@@ -12,18 +12,22 @@ import one.epicsoft.vc.dto.TaskSectionDto;
 import one.epicsoft.vc.dto.UpdateDecisionRequest;
 import one.epicsoft.vc.enums.CheckState;
 import one.epicsoft.vc.enums.DecisionState;
+import one.epicsoft.vc.enums.MaxStep;
 import one.epicsoft.vc.enums.SourceType;
 import one.epicsoft.vc.enums.TaskSection;
 import one.epicsoft.vc.exception.AppValidationException;
 import one.epicsoft.vc.jpa.entity.ComponentEntity;
+import one.epicsoft.vc.jpa.entity.EolStatusEntity;
 import one.epicsoft.vc.jpa.entity.UpdateCheckEntity;
 import one.epicsoft.vc.service.ComponentService;
+import one.epicsoft.vc.service.EolStatusService;
 import one.epicsoft.vc.service.UpdateCheckService;
 import one.epicsoft.vc.service.UpdateDecisionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
@@ -62,6 +66,9 @@ class TaskListFacadeIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
   private UpdateCheckService updateCheckService;
+
+  @Autowired
+  private EolStatusService eolStatusService;
 
   @Autowired
   private UpdateDecisionService updateDecisionService;
@@ -273,6 +280,106 @@ class TaskListFacadeIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void putsAnEndedSupportAboveEverythingElse() {
+    final UUID projectId = this.project();
+    final ComponentDto behind = this.componentWithVersion(projectId, "17.2");
+    this.recordCheck(behind, "17.4", CheckState.OK, Instant.now());
+    final ComponentDto expired = this.componentWithVersion(projectId, "13.1");
+    this.recordEol(expired, LocalDate.now().minusMonths(2), true);
+
+    final List<TaskSection> order = this.sections(this.taskListFacade.getByProject(projectId)).stream()
+                                        .map(TaskSectionDto::getSection).toList();
+
+    // What is out of support comes before what is merely behind.
+    assertEquals(TaskSection.EOL_EXCEEDED, order.getFirst());
+  }
+
+  @Test
+  void separatesAWarningFromSomethingThatHasToBeDone() {
+    final UUID projectId = this.project();
+    final ComponentDto soon = this.componentWithVersion(projectId, "17.2");
+    // Inside the warning window, outside the escalation window.
+    this.recordEol(soon, LocalDate.now().plusMonths(5), false);
+
+    assertEquals(1, this.section(this.taskListFacade.getByProject(projectId), TaskSection.EOL_WARNING)
+                        .getEntries().size());
+  }
+
+  @Test
+  void saysNothingAboutSupportThatEndsFarAway() {
+    final UUID projectId = this.project();
+    final ComponentDto component = this.componentWithVersion(projectId, "17.2");
+    this.recordEol(component, LocalDate.now().plusYears(3), false);
+
+    assertTrue(this.sections(this.taskListFacade.getByProject(projectId)).stream()
+                   .noneMatch(section -> TaskSection.EOL_WARNING.equals(section.getSection())
+                                         || TaskSection.EOL_EXCEEDED.equals(section.getSection())));
+  }
+
+  @Test
+  void proposesThePermissibleTargetRatherThanTheNewestVersion() {
+    final UUID projectId = this.project();
+    final ComponentRequest request = this.componentRequest(projectId, "PostgreSQL " + UUID.randomUUID());
+    request.setMaxStep(MaxStep.MINOR);
+    final ComponentDto component = this.componentFacade.create(request);
+    final EnvironmentDto environment = this.environment(projectId, "Production " + UUID.randomUUID(), true);
+    this.cell(component.getId(), environment.getId(), "16.4");
+    this.recordCheckWithCandidates(component, "18.2", List.of("16.4", "16.9", "17.2", "18.2"));
+
+    final TaskSectionDto section = this.section(this.taskListFacade.getByProject(projectId), TaskSection.UPDATE_OPEN);
+
+    // 16.9 is what can be done now; 18.2 is a project and belongs on the
+    // component page as a note, not here as a demand.
+    assertEquals("16.9", section.getEntries().getFirst().getLatestVersion());
+  }
+
+  @Test
+  void raisesNoTaskWhenEverythingAvailableIsPastTheLimit() {
+    final UUID projectId = this.project();
+    final ComponentRequest request = this.componentRequest(projectId, "PostgreSQL " + UUID.randomUUID());
+    request.setMaxStep(MaxStep.MINOR);
+    final ComponentDto component = this.componentFacade.create(request);
+    final EnvironmentDto environment = this.environment(projectId, "Production " + UUID.randomUUID(), true);
+    this.cell(component.getId(), environment.getId(), "16.4");
+    this.recordCheckWithCandidates(component, "18.2", List.of("16.4", "18.2"));
+
+    // A permanent red state nobody can resolve teaches people to ignore red states.
+    assertTrue(this.sections(this.taskListFacade.getByProject(projectId)).stream()
+                   .noneMatch(section -> TaskSection.UPDATE_OPEN.equals(section.getSection())));
+  }
+
+  @Test
+  void proposesOnlyVersionsTheRuleAccepts() {
+    final UUID projectId = this.project();
+    final ComponentRequest request = this.componentRequest(projectId, "PostgreSQL " + UUID.randomUUID());
+    request.setTagPattern("^\\d+\\.\\d+$");
+    final ComponentDto component = this.componentFacade.create(request);
+    final EnvironmentDto environment = this.environment(projectId, "Production " + UUID.randomUUID(), true);
+    this.cell(component.getId(), environment.getId(), "16.4");
+    // The stored list is what the source offered, variants and all.
+    this.recordCheckWithCandidates(component, "16.9", List.of("16.4", "16.9", "16.9-alpine", "16.9-bookworm"));
+
+    final TaskSectionDto section = this.section(this.taskListFacade.getByProject(projectId), TaskSection.UPDATE_OPEN);
+
+    // A proposal naming a variant the rule rejects is one the check itself would
+    // never have reported.
+    assertEquals("16.9", section.getEntries().getFirst().getLatestVersion());
+  }
+
+  @Test
+  void keepsAnEndedSupportOnTheListWhileTheLookupIsFailing() {
+    final UUID projectId = this.project();
+    final ComponentDto component = this.componentWithVersion(projectId, "13.1");
+    this.recordEol(component, LocalDate.now().minusMonths(2), true);
+    this.failEolLookup(component);
+
+    // The dates of the last good answer are kept on failure; dropping the entry
+    // would take an out-of-support component off the start page entirely.
+    assertEquals(1, this.section(this.taskListFacade.getByProject(projectId), TaskSection.EOL_EXCEEDED)
+                        .getEntries().size());
+  }
+
+  @Test
   void refusesToSetBlockedByHandAndAPostponementWithoutADate() {
     final UUID projectId = this.project();
     final ComponentDto component = this.componentWithVersion(projectId, "17.2");
@@ -309,6 +416,37 @@ class TaskListFacadeIntegrationTest extends AbstractIntegrationTest {
     request.setSnoozeUntil(snoozeUntil);
     request.setNote("Not this quarter");
     this.updateDecisionFacade.decide(request);
+  }
+
+  /** Writes an end-of-life result directly; the lookup itself is tested offline. */
+  private void recordEol(final ComponentDto component, final LocalDate eolDate, final boolean over) {
+    final EolStatusEntity status = this.eolStatusService.findByComponent(component.getId())
+                                       .orElseGet(EolStatusEntity::new);
+    status.setComponent(this.componentService.getById(component.getId()));
+    status.setEolDate(eolDate);
+    status.setEol(over);
+    status.setCheckedAt(Instant.now());
+    status.setCheckState(CheckState.OK);
+    this.eolStatusService.save(status);
+  }
+
+  /** Lets the last end-of-life lookup fail, with its dates still on the row. */
+  private void failEolLookup(final ComponentDto component) {
+    final EolStatusEntity status = this.eolStatusService.findByComponent(component.getId()).orElseThrow();
+    status.setCheckState(CheckState.ERROR);
+    status.setErrorMessage("Request failed");
+    this.eolStatusService.save(status);
+  }
+
+  private void recordCheckWithCandidates(final ComponentDto component, final String latestVersion,
+                                         final List<String> candidates) {
+    this.recordCheck(component, latestVersion, CheckState.OK, Instant.now());
+    final UpdateCheckEntity check = this.updateCheckService.findByComponent(component.getId()).orElseThrow();
+    // The stored candidate list is what makes a limited step possible at all:
+    // without it only the newest version is known and the one in between cannot
+    // be named.
+    check.setCandidateTags(String.join("\n", candidates));
+    this.updateCheckService.save(check);
   }
 
   /** Writes a check result directly: what the adapters do is tested without a network elsewhere. */

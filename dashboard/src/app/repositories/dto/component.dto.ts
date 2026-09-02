@@ -1,4 +1,5 @@
 import {MaxStep, SourceType, VersionStrategy} from './enums.dto';
+import {UpgradeStopDto, UpgradeStopRequest} from './upgrade.dto';
 
 /** One package of a component that consists of several. */
 export class ComponentPackageDto {
@@ -37,6 +38,8 @@ export class ComponentDto {
   public eolCycle?: string;
   public checkEnabled!: boolean;
   public packages: ComponentPackageDto[] = [];
+  /** Versions that cannot be skipped on the way up. */
+  public upgradeStops: UpgradeStopDto[] = [];
 
   constructor(init?: Partial<ComponentDto>) {
     Object.assign(this, init);
@@ -77,6 +80,8 @@ export class ComponentRequest {
   public checkEnabled?: boolean;
   /** Omitted leaves the stored packages alone; an empty list clears them. */
   public packages?: ComponentPackageRequest[];
+  /** Same shape for the stops: omitted keeps them, an empty list clears them. */
+  public upgradeStops?: UpgradeStopRequest[];
 
   constructor(init?: Partial<ComponentRequest>) {
     Object.assign(this, init);

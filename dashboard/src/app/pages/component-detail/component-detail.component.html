@@ -107,6 +107,100 @@
     }
   </section>
 
+  @if (eol) {
+    <section class="mb-4">
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <h2 class="h6 text-uppercase text-secondary mb-0">{{ 'eol.section' | translate }}</h2>
+        <button type="button" class="btn btn-sm btn-outline-primary" [disabled]="checkingEol" (click)="checkEolNow()">
+          {{ 'check.action.checkNow' | translate }}
+        </button>
+      </div>
+      @if (eol.checkState === 'ERROR') {
+        <p class="mb-0"><span class="text-danger-emphasis small">{{ eol.errorMessage }}</span></p>
+      }
+      <dl class="row mb-0 small">
+        <dt class="col-sm-3">{{ 'eol.field.eolDate' | translate }}</dt>
+        <dd class="col-sm-9">
+          {{ (eol.eolDate | date: 'mediumDate') || dash }}
+          @if (eol.eol) {
+            <span class="badge text-bg-danger ms-1">{{ 'eol.over' | translate }}</span>
+          }
+        </dd>
+        @if (eol.supportedUntil) {
+          <dt class="col-sm-3">{{ 'eol.field.supportedUntil' | translate }}</dt>
+          <dd class="col-sm-9">{{ eol.supportedUntil | date: 'mediumDate' }}</dd>
+        }
+      </dl>
+    </section>
+  }
+
+  @if (proposals.length > 0) {
+    <section class="mb-4">
+      <h2 class="h6 text-uppercase text-secondary">{{ 'proposal.section' | translate }}</h2>
+      <table class="table table-sm align-middle">
+        <thead>
+        <tr>
+          <th scope="col">{{ 'component.column.environment' | translate }}</th>
+          <th scope="col">{{ 'component.column.version' | translate }}</th>
+          <th scope="col">{{ 'proposal.target' | translate }}</th>
+          <th scope="col">{{ 'proposal.beyond' | translate }}</th>
+        </tr>
+        </thead>
+        <tbody>
+          @for (proposal of proposals; track proposal.environmentId) {
+            <tr>
+              <th scope="row" class="fw-normal">{{ proposal.environmentName }}</th>
+              <td class="text-secondary">{{ proposal.currentVersion || dash }}</td>
+              <td>
+                @if (proposal.target) {
+                  <span class="fw-semibold">{{ proposal.target }}</span>
+                  @if (proposal.needsMaintenanceWindow) {
+                    <i class="bi bi-clock-history text-secondary ms-1"
+                       [title]="'proposal.maintenanceWindow' | translate"></i>
+                  }
+                } @else {
+                  <span class="text-secondary">{{ dash }}</span>
+                }
+              </td>
+              <td class="small text-secondary">
+                @if (proposal.beyond) {
+                  {{ proposal.beyond }}
+                  <div>{{ 'proposal.beyondHint' | translate }}</div>
+                }
+              </td>
+            </tr>
+            @if (proposal.stops.length > 0 || proposal.upgradePathNotes || proposal.upgradeDocUrl) {
+              <tr>
+                <td colspan="4" class="small">
+                  @if (proposal.stops.length > 0) {
+                    <div>
+                      <span class="text-secondary">{{ 'proposal.stops' | translate }}:</span>
+                      @for (stop of proposal.stops; track stop.id) {
+                        <span class="ms-1"><code>{{ stop.version }}</code>
+                          @if (stop.note) {
+                            <span class="text-secondary">({{ stop.note }})</span>
+                          }
+                        </span>
+                      }
+                    </div>
+                  }
+                  @if (proposal.upgradePathNotes) {
+                    <div class="text-secondary">{{ proposal.upgradePathNotes }}</div>
+                  }
+                  @if (proposal.upgradeDocUrl) {
+                    <a [href]="proposal.upgradeDocUrl" target="_blank" rel="noopener">
+                      {{ 'proposal.documentation' | translate }}
+                    </a>
+                  }
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+
   <section class="mb-4">
     <h2 class="h6 text-uppercase text-secondary">{{ 'component.section.environments' | translate }}</h2>
     <table class="table table-sm align-middle">

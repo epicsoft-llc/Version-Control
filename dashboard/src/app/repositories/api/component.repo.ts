@@ -3,6 +3,7 @@ import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
 import {UrlBuilder} from '../item/url.item';
 import {ComponentDto, ComponentRequest} from '../dto/component.dto';
+import {UpgradeProposalDto} from '../dto/upgrade.dto';
 
 @Injectable({providedIn: 'root'})
 export class ComponentRepo {
@@ -11,6 +12,7 @@ export class ComponentRepo {
 
   private readonly pathAll = '/v1/components';
   private readonly pathOne = '/v1/components/{id}';
+  private readonly pathProposals = '/v1/components/{id}/proposals';
 
   public findAllByProject(projectId: string): Observable<ComponentDto[]> {
     return this.http.get<ComponentDto[]>(UrlBuilder.builder()
@@ -21,6 +23,14 @@ export class ComponentRepo {
 
   public getById(id: string): Observable<ComponentDto> {
     return this.http.get<ComponentDto>(UrlBuilder.builder().addPath(this.pathOne).addParam('id', id).build().getUrl());
+  }
+
+  /** What to do next in each environment, with the versions that cannot be skipped. */
+  public getProposals(id: string): Observable<UpgradeProposalDto[]> {
+    return this.http.get<UpgradeProposalDto[]>(UrlBuilder.builder()
+                                                         .addPath(this.pathProposals)
+                                                         .addParam('id', id)
+                                                         .build().getUrl());
   }
 
   public create(request: ComponentRequest): Observable<ComponentDto> {

@@ -99,4 +99,9 @@ public class ComponentDto {
   @Nonnull
   @JsonProperty("packages")
   private List<ComponentPackageDto> packages;
+
+  /** Versions that cannot be skipped on the way up. */
+  @Nonnull
+  @JsonProperty("upgradeStops")
+  private List<UpgradeStopDto> upgradeStops;
 }

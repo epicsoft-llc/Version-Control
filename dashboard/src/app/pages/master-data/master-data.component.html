@@ -300,6 +300,27 @@
           </div>
         }
 
+        <div class="mb-2">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="form-label mb-0">{{ 'proposal.stops' | translate }}</span>
+            <button type="button" class="btn btn-sm btn-outline-primary" (click)="addStopRow()">
+              {{ 'masterData.stops.add' | translate }}
+            </button>
+          </div>
+          <p class="form-text mt-0">{{ 'masterData.stops.hint' | translate }}</p>
+          @for (row of stopRows; track $index) {
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <input type="text" class="form-control form-control-sm w-auto" [name]="'stopVersion' + $index"
+                     [(ngModel)]="row.version" [placeholder]="'component.column.version' | translate">
+              <input type="text" class="form-control form-control-sm" [name]="'stopNote' + $index"
+                     [(ngModel)]="row.note" [placeholder]="'masterData.stops.note' | translate">
+              <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeStopRow($index)">
+                {{ 'common.remove' | translate }}
+              </button>
+            </div>
+          }
+        </div>
+
         <div class="mt-2">
           <button type="button" class="btn btn-primary me-1" (click)="saveComponent()">
             {{ 'common.save' | translate }}
