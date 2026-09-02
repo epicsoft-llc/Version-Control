@@ -47,11 +47,29 @@ subprojects {
   }
 
   // ###########################################################
-  // #### Test — "integration" needs Docker and is skipped without it
+  // #### Test — "integration" needs a real database, from one of two places:
+  // #### a Docker daemon for Testcontainers, or one handed over through
+  // #### VC_DATABASE_HOST (the pipeline attaches PostgreSQL as a service).
+  // ####
+  // #### Skipping the tag is a convenience for a machine that has neither. In
+  // #### CI it would be a green pipeline that tested far less than it claims,
+  // #### so there the build stops instead — at execution time, so that a job
+  // #### running with "-x test" is not affected.
   // ###########################################################
   tasks.named("test") {
+    final def databaseHost = System.getenv("VC_DATABASE_HOST")
+    final boolean integrationPossible = (databaseHost != null && !databaseHost.isBlank()) || dockerAvailable()
+
+    doFirst {
+      if (!integrationPossible && System.getenv("CI")) {
+        throw new GradleException("Integration tests cannot run: no Docker daemon answers and " +
+                                  "VC_DATABASE_HOST is unset. Skipping them here would report a " +
+                                  "green build for a test set that never ran.")
+      }
+    }
+
     useJUnitPlatform {
-      if (!dockerAvailable()) {
+      if (!integrationPossible) {
         excludeTags "integration"
       }
     }
@@ -165,7 +183,7 @@ subprojects {
   }
 }
 
-/** True when a Docker daemon answers; integration tests need one. */
+/** True when a Docker daemon answers; Testcontainers needs one. */
 static boolean dockerAvailable() {
   try {
     final def process = new ProcessBuilder("docker", "info")

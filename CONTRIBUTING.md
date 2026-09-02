@@ -18,8 +18,11 @@ Java 25 and Node 24; `.vfox.toml` pins both.
 cd dashboard && npm ci && npm run build
 ```
 
-You need no credentials for any of this. Tests that require a database are tagged `integration` and
-start a container through Testcontainers; without a Docker daemon they are skipped rather than failing.
+You need no credentials for any of this. Tests that require a database are tagged `integration`. They
+use the database named by `VC_DATABASE_HOST` when that variable is set, and otherwise start one through
+Testcontainers — so a Docker daemon is enough, and nothing has to be installed. With neither at hand the
+tag is skipped rather than failing, except in CI, where the build stops instead: a pipeline must not go
+green for a test set that never ran.
 
 ## Branches and commits
 
@@ -55,6 +58,10 @@ each group is all-or-nothing — set every variable in it or none.
 | Vulnerability scan | `VC_DEPCHECK_URL`, `VC_DEPCHECK_USERNAME`, `VC_DEPCHECK_PASSWORD`, `VC_DEPCHECK_RUNNER_TAG`, `VC_DEPCHECK_DRIVER`, `VC_DEPCHECK_DRIVER_JAR` | the job does not run |
 | Package mirror | `VC_MAVEN_MIRROR_URL`, `VC_GRADLE_PLUGIN_MIRROR_URL`, `VC_MAVEN_MIRROR_USERNAME`, `VC_MAVEN_MIRROR_PASSWORD`, `VC_NPM_REGISTRY`, `VC_NPM_USERNAME`, `VC_NPM_PASSWORD` | Maven Central, the Gradle Plugin Portal and npm are used directly |
 
+A freshly added key is translated asynchronously and can take minutes. Pull only once every key has a
+value in the fallback language — otherwise the committed files miss it and the next pipeline fails on a
+check that is doing its job.
+
 Mask every credential. Do **not** mark them *protected* unless the branch is protected too — a protected
 variable is absent on an unprotected branch, and the translation pull would then quietly ship the
 committed files instead of failing.
@@ -64,8 +71,9 @@ print a configuration, a registry address or an environment dump: masking protec
 masked variables, and file variables are not masked at all. Diagnostics say which path was taken, never
 with which values.
 
-The image jobs need the project's container registry enabled and a runner tagged `image`; the test job
-needs a runner that can run `docker:dind`, because the integration tests start a database container.
+The image jobs need the project's container registry enabled and a runner tagged `image`. The test job
+attaches PostgreSQL as a service and points the tests at it through `VC_DATABASE_*`, so it needs no
+Docker of its own.
 
 ## Pull requests
 

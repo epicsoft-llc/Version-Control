@@ -1,6 +1,12 @@
 {
+  "error.badRequest": "Die Anfrage ist fehlerhaft.",
+  "error.differentProjects": "Komponente und Umgebung gehören zu verschiedenen Projekten.",
+  "error.duplicateName": "Dieser Name ist bereits vergeben.",
+  "error.duplicatePackage": "Ein Paket ist mehrfach aufgeführt.",
   "error.methodNotAllowed": "Diese Aktion ist hier nicht erlaubt.",
   "error.notFound": "Der angeforderte Eintrag existiert nicht.",
+  "error.projectCannotChange": "Eine Komponente kann nicht in ein anderes Projekt verschoben werden.",
   "error.unexpected": "Da ist etwas schiefgegangen. Bitte erneut versuchen.",
-  "error.validation": "Bitte die markierten Felder prüfen."
+  "error.validation": "Bitte die markierten Felder prüfen.",
+  "error.versionNeedsHistory": "Diese Version lässt sich nur über den Dialog zum Ändern der Version anpassen."
 }

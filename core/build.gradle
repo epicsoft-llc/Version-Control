@@ -50,6 +50,8 @@ dependencies {
 
   // #### TEST ################################################################
   testImplementation "org.springframework.boot:spring-boot-starter-test"
+  //// MockMvc lives in its own starter since Spring Boot 4.
+  testImplementation "org.springframework.boot:spring-boot-starter-webmvc-test"
   testImplementation libs.testcontainers.postgresql
   testImplementation libs.testcontainers.junit
   testRuntimeOnly "org.junit.platform:junit-platform-launcher"

@@ -62,13 +62,25 @@ TST:core:
   stage: test
   image: ${JDK_IMAGE}
   services:
-    - name: docker:dind
-      alias: docker
+    #### PostgreSQL as a service, not Testcontainers inside dind: the job then
+    #### needs no Docker at all, and one database less is pulled and started.
+    #### Locally the same tests start their own container — see
+    #### AbstractIntegrationTest.
+    - name: postgres:18-alpine
+      alias: postgres
   variables:
-    #### Testcontainers talks to the dind service, not a local socket.
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-    TESTCONTAINERS_RYUK_DISABLED: "true"
+    #### No password anywhere: the service listens only inside this job's network
+    #### and lives for the length of it, so "trust" is both safe and honest —
+    #### a made-up password in a public file would only look like a secret.
+    POSTGRES_DB: versioncontrol
+    POSTGRES_USER: vc
+    POSTGRES_HOST_AUTH_METHOD: trust
+    #### Read by application.yml; VC_DATABASE_HOST is also what tells the tests
+    #### to use this database instead of starting one.
+    VC_DATABASE_HOST: postgres
+    VC_DATABASE_NAME: versioncontrol
+    VC_DATABASE_USERNAME: vc
+    VC_DATABASE_PASSWORD: ""
   before_script:
     - chmod +x gradlew
   script:
