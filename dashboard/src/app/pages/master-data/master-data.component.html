@@ -187,8 +187,41 @@
           </div>
           <div class="col-md-6 mb-2">
             <label class="form-label" for="componentTagPattern">{{ 'component.field.tagPattern' | translate }}</label>
-            <input type="text" class="form-control" id="componentTagPattern" name="componentTagPattern"
-                   [(ngModel)]="componentForm.tagPattern">
+            <div class="input-group">
+              <input type="text" class="form-control" id="componentTagPattern" name="componentTagPattern"
+                     [(ngModel)]="componentForm.tagPattern">
+              <button type="button" class="btn btn-outline-secondary" [disabled]="previewing || !componentFormId"
+                      (click)="previewRule()">{{ 'preview.action' | translate }}
+              </button>
+            </div>
+            <div class="form-text">{{ 'preview.hint' | translate }}</div>
+
+            @if (preview) {
+              <div class="border rounded p-2 mt-2 small">
+                @if (preview.message) {
+                  <div class="text-danger-emphasis">{{ preview.message }}</div>
+                } @else if (preview.matching.length === 0) {
+                  <div class="text-secondary">{{ 'preview.none' | translate }}</div>
+                } @else {
+                  @if (!preview.matching[0].packageName) {
+                    <div class="mb-1">
+                      {{ 'preview.winner' | translate }}: <strong>{{ preview.winner }}</strong>
+                    </div>
+                  }
+                  <div class="text-secondary">
+                    {{ 'preview.matching' | translate }}:
+                    @for (candidate of preview.matching; track $index) {
+                      <span class="me-2">
+                        @if (candidate.packageName) {
+                          <span class="text-body-secondary">{{ candidate.packageName }}</span>
+                        }
+                        <code>{{ candidate.tag }}</code>
+                      </span>
+                    }
+                  </div>
+                }
+              </div>
+            }
           </div>
           <div class="col-md-6 mb-2">
             <label class="form-label" for="componentVersionStrategy">

@@ -34,6 +34,7 @@
             }
           </th>
         }
+        <th scope="col" class="border-start">{{ 'matrix.column.available' | translate }}</th>
       </tr>
       </thead>
       <tbody>
@@ -84,6 +85,35 @@
                 }
               </td>
             }
+
+            <td class="border-start">
+              @if (checkOf(row.componentId); as check) {
+                @switch (check.checkState) {
+                  @case ('OK') {
+                    @if (check.latestVersion) {
+                      <span [class.fw-semibold]="updateAvailable(row)">{{ check.latestVersion }}</span>
+                      @if (updateAvailable(row)) {
+                        <i class="bi bi-arrow-up-circle text-primary ms-1"
+                           [title]="'matrix.updateAvailable' | translate"></i>
+                      }
+                    } @else {
+                      <span class="text-secondary fst-italic">{{ 'check.noVersion' | translate }}</span>
+                    }
+                  }
+                  @case ('ERROR') {
+                    <i class="bi bi-x-octagon text-danger" [title]="check.errorMessage"></i>
+                    <span class="text-secondary small ms-1">{{ 'check.state.ERROR' | translate }}</span>
+                  }
+                  @default {
+                    <span class="text-secondary opacity-50" [title]="'check.state.NOT_APPLICABLE' | translate">
+                      &ndash;
+                    </span>
+                  }
+                }
+              } @else {
+                <span class="text-secondary opacity-50" [title]="'check.never' | translate">&middot;</span>
+              }
+            </td>
           </tr>
         }
       </tbody>

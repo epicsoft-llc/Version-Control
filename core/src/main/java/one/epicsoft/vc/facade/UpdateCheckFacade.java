@@ -122,11 +122,14 @@ public class UpdateCheckFacade {
    */
   @Nonnull
   @Transactional(rollbackFor = Throwable.class)
-  public List<VersionCandidate> preview(@Nonnull final UUID componentId, @Nullable final String tagPattern) {
-    final ComponentEntity component = this.componentService.getById(componentId);
+  public List<VersionCandidate> preview(@Nonnull final VersionPreviewRequest request) {
+    final ComponentEntity component = this.componentService.getById(request.getComponentId());
     if (SourceType.MANUAL.equals(component.getSourceType())) {
-      return List.of();
+      // Not a rule problem: there is nothing to ask. Pointing the reader at their
+      // pattern here would send them looking in the wrong place.
+      throw new VersionRuleException("This component has no source to query; its version is only ever recorded by hand");
     }
+    final UUID componentId = component.getId();
 
     final Optional<UpdateCheckEntity> stored = this.updateCheckService.findByComponent(componentId);
     final List<VersionCandidate> candidates =
@@ -138,11 +141,21 @@ public class UpdateCheckFacade {
     if (candidates.isEmpty()) {
       throw new VersionRuleException("The last check of this component found no versions");
     }
+    // Every part of the rule comes from the form where the form has one, and from
+    // the stored component where it does not.
     return this.versionSelector.matching(candidates,
-                                         nonBlank(tagPattern) ? tagPattern : this.rulePattern(component, candidates),
-                                         component.getMajorConstraint(),
-                                         component.isAllowPrerelease(),
-                                         component.getVersionStrategy());
+                                         nonBlank(request.getTagPattern())
+                                             ? request.getTagPattern()
+                                             : this.rulePattern(component, candidates),
+                                         nonBlank(request.getMajorConstraint())
+                                             ? request.getMajorConstraint()
+                                             : component.getMajorConstraint(),
+                                         isNull(request.getAllowPrerelease())
+                                             ? component.isAllowPrerelease()
+                                             : request.getAllowPrerelease(),
+                                         isNull(request.getVersionStrategy())
+                                             ? component.getVersionStrategy()
+                                             : request.getVersionStrategy());
   }
 
   // #### For the API
@@ -181,7 +194,7 @@ public class UpdateCheckFacade {
   public VersionPreviewDto previewRule(@Nonnull final VersionPreviewRequest request) {
     final VersionPreviewDto preview = new VersionPreviewDto();
     try {
-      final List<VersionCandidate> matching = this.preview(request.getComponentId(), request.getTagPattern());
+      final List<VersionCandidate> matching = this.preview(request);
       preview.setMatching(this.updateCheckMapper.toCandidates(matching));
       preview.setWinner(matching.isEmpty() ? null : matching.getFirst().tag());
     } catch (final VersionRuleException | SourceException exception) {

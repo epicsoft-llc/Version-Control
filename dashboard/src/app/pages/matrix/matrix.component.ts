@@ -7,12 +7,14 @@ import {NgbModal} from '@ng-bootstrap/ng-bootstrap';
 import {TranslatePipe} from '@ngx-translate/core';
 import {catchError, forkJoin, of, Subject, Subscription, switchMap, tap} from 'rxjs';
 import {ProjectDto} from '../../repositories/dto/project.dto';
-import {MatrixCellDto, MatrixDto} from '../../repositories/dto/matrix.dto';
+import {MatrixCellDto, MatrixDto, MatrixRowDto} from '../../repositories/dto/matrix.dto';
+import {UpdateCheckDto} from '../../repositories/dto/update-check.dto';
 import {ProjectRepo} from '../../repositories/api/project.repo';
 import {ComponentRepo} from '../../repositories/api/component.repo';
 import {ComponentEnvironmentRepo} from '../../repositories/api/component-environment.repo';
+import {UpdateCheckRepo} from '../../repositories/api/update-check.repo';
 import {VersionChangeDialogComponent} from '../../components/version-change-dialog/version-change-dialog.component';
-import {isDefined, unsubscribe} from '../../libs/utils/vc.utils';
+import {isDefined, notDefined, unsubscribe} from '../../libs/utils/vc.utils';
 
 /**
  * The overview: components as rows, environments as columns.
@@ -32,6 +34,7 @@ export class MatrixComponent implements OnInit, OnDestroy {
   private readonly projectRepo: ProjectRepo = inject(ProjectRepo);
   private readonly componentRepo: ComponentRepo = inject(ComponentRepo);
   private readonly componentEnvironmentRepo: ComponentEnvironmentRepo = inject(ComponentEnvironmentRepo);
+  private readonly updateCheckRepo: UpdateCheckRepo = inject(UpdateCheckRepo);
   private readonly modal: NgbModal = inject(NgbModal);
   private readonly subs: Subscription[] = [];
 
@@ -44,6 +47,8 @@ export class MatrixComponent implements OnInit, OnDestroy {
   protected projects: ProjectDto[] = [];
   protected selectedProjectId?: string;
   protected matrix?: MatrixDto;
+  /** By component id, so a row can show what the last check found. */
+  protected checks = new Map<string, UpdateCheckDto>();
   protected loading = true;
   protected errorMessage?: string;
 
@@ -57,12 +62,18 @@ export class MatrixComponent implements OnInit, OnDestroy {
         this.loading = true;
         this.errorMessage = undefined;
       }),
-      switchMap((projectId) => this.projectRepo.getMatrix(projectId).pipe(catchError((error) => {
+      switchMap((projectId) => forkJoin({
+        matrix: this.projectRepo.getMatrix(projectId),
+        // The available column is auxiliary. A failure there must not take the
+        // matrix with it — that is the screen people came for.
+        checks: this.updateCheckRepo.findAllByProject(projectId).pipe(catchError(() => of([])))
+      }).pipe(catchError((error) => {
         this.showError(error);
         return of(undefined);
       })))
-    ).subscribe((matrix) => {
-      this.matrix = matrix;
+    ).subscribe((loaded) => {
+      this.matrix = loaded?.matrix;
+      this.checks = new Map((loaded?.checks ?? []).map((check) => [check.componentId, check]));
       this.loading = false;
     }));
 
@@ -87,6 +98,26 @@ export class MatrixComponent implements OnInit, OnDestroy {
 
   protected selectProject(projectId: string): void {
     this.selection.next(projectId);
+  }
+
+  protected checkOf(componentId: string): UpdateCheckDto | undefined {
+    return this.checks.get(componentId);
+  }
+
+  /**
+   * True when the source offers something the row does not run anywhere. Read
+   * from the recorded versions rather than from a comparison of version numbers:
+   * how far apart two versions are belongs to the step rules, which come later.
+   */
+  protected updateAvailable(row: MatrixRowDto): boolean {
+    const latest = this.checkOf(row.componentId)?.latestVersion;
+    if (notDefined(latest)) {
+      return false;
+    }
+    // Any environment that is behind counts, not only the case where every one
+    // of them is. Half way through a rollout production is still on the old
+    // version, and that is exactly when the row has to keep saying so.
+    return row.cells.some((cell) => cell.state === 'RECORDED' && cell.currentVersion !== latest);
   }
 
   protected environmentName(environmentId: string): string {

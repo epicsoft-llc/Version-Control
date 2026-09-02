@@ -8,9 +8,11 @@ import {ProjectDto, ProjectRequest} from '../../repositories/dto/project.dto';
 import {EnvironmentDto, EnvironmentRequest} from '../../repositories/dto/environment.dto';
 import {ComponentDto, ComponentPackageRequest, ComponentRequest} from '../../repositories/dto/component.dto';
 import {MAX_STEPS, SOURCE_TYPES, VERSION_STRATEGIES} from '../../repositories/dto/enums.dto';
+import {VersionPreviewDto, VersionPreviewRequest} from '../../repositories/dto/update-check.dto';
 import {ProjectRepo} from '../../repositories/api/project.repo';
 import {EnvironmentRepo} from '../../repositories/api/environment.repo';
 import {ComponentRepo} from '../../repositories/api/component.repo';
+import {UpdateCheckRepo} from '../../repositories/api/update-check.repo';
 import {isDefined, nonBlank, notDefined, unsubscribe} from '../../libs/utils/vc.utils';
 
 /** One row of the package editor: a name, an order and the leading flag. */
@@ -41,6 +43,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
   private readonly projectRepo: ProjectRepo = inject(ProjectRepo);
   private readonly environmentRepo: EnvironmentRepo = inject(EnvironmentRepo);
   private readonly componentRepo: ComponentRepo = inject(ComponentRepo);
+  private readonly updateCheckRepo: UpdateCheckRepo = inject(UpdateCheckRepo);
   private readonly subs: Subscription[] = [];
 
   /**
@@ -67,6 +70,8 @@ export class MasterDataComponent implements OnInit, OnDestroy {
   protected componentForm?: ComponentRequest;
   protected componentFormId?: string;
   protected packageRows: PackageRow[] = [];
+  protected preview?: VersionPreviewDto;
+  protected previewing = false;
 
   public ngOnInit(): void {
     this.subs.push(this.selection.pipe(
@@ -269,12 +274,56 @@ export class MasterDataComponent implements OnInit, OnDestroy {
     }));
   }
 
+  /**
+   * Shows which tags the rule in the form would accept and which of them wins.
+   *
+   * <p>Not a convenience. Without it a regular expression is written against a
+   * tag list nobody can see, and that is where rule maintenance fails in
+   * practice. The server answers a pattern that matches nothing with an
+   * explanation rather than an error, because half finished patterns are the
+   * normal state of this field.
+   */
+  protected previewRule(): void {
+    if (notDefined(this.componentFormId) || this.previewing) {
+      // Only for a component that exists: the preview asks its configured source.
+      return;
+    }
+    this.previewing = true;
+    this.preview = undefined;
+    // The whole rule as it stands in the form, not only the pattern: a preview
+    // that answered with the saved major constraint while the form shows another
+    // one would answer a question nobody asked.
+    const request = new VersionPreviewRequest({
+      componentId: this.componentFormId,
+      tagPattern: this.componentForm?.tagPattern,
+      majorConstraint: this.componentForm?.majorConstraint,
+      allowPrerelease: this.componentForm?.allowPrerelease,
+      versionStrategy: this.componentForm?.versionStrategy
+    });
+    this.subs.push(this.updateCheckRepo.preview(request).subscribe({
+      next: (preview) => {
+        this.preview = preview;
+        this.previewing = false;
+      },
+      error: (error: HttpErrorResponse) => {
+        this.previewing = false;
+        this.showError(error);
+      }
+    }));
+  }
+
   protected addPackageRow(): void {
     this.packageRows.push(new PackageRow({leadingPackage: this.packageRows.length === 0}));
   }
 
   protected removePackageRow(index: number): void {
     this.packageRows.splice(index, 1);
+    // Removing the row that was leading would leave the component without one,
+    // and the matrix cell of a package component would then stay empty however
+    // many versions are recorded.
+    if (this.packageRows.length > 0 && !this.packageRows.some((row) => row.leadingPackage)) {
+      this.packageRows[0].leadingPackage = true;
+    }
   }
 
   /** Exactly one package leads: it is the version the matrix cell shows. */
@@ -294,6 +343,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
     this.componentForm = undefined;
     this.componentFormId = undefined;
     this.packageRows = [];
+    this.preview = undefined;
     this.errorMessage = undefined;
   }
 

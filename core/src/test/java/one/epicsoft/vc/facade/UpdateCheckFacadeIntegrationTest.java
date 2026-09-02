@@ -11,6 +11,7 @@ import one.epicsoft.vc.dto.VersionPreviewDto;
 import one.epicsoft.vc.dto.VersionPreviewRequest;
 import one.epicsoft.vc.enums.CheckState;
 import one.epicsoft.vc.enums.SourceType;
+import one.epicsoft.vc.enums.VersionStrategy;
 import one.epicsoft.vc.exception.AppValidationException;
 import one.epicsoft.vc.jpa.entity.UpdateCheckEntity;
 import one.epicsoft.vc.service.ComponentService;
@@ -170,6 +171,33 @@ class UpdateCheckFacadeIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void saysAManualComponentHasNoSourceRatherThanBlamingTheRule() {
+    final ComponentDto component = this.component(SourceType.MANUAL, null);
+    final VersionPreviewRequest request = new VersionPreviewRequest();
+    request.setComponentId(component.getId());
+
+    final VersionPreviewDto preview = this.updateCheckFacade.previewRule(request);
+
+    // Pointing at the pattern would send the reader looking in the wrong place.
+    assertNotNull(preview.getMessage());
+    assertTrue(preview.getMatching().isEmpty());
+  }
+
+  @Test
+  void previewsTheRuleAsItStandsInTheFormRatherThanTheStoredOne() {
+    final ComponentDto component = this.component(SourceType.APT_REPOSITORY, "http://localhost:1/repository");
+    final VersionPreviewRequest request = new VersionPreviewRequest();
+    request.setComponentId(component.getId());
+    request.setMajorConstraint("29");
+    request.setAllowPrerelease(Boolean.TRUE);
+    request.setVersionStrategy(VersionStrategy.SEMVER);
+
+    // The request is accepted with every rule field, not only the pattern; the
+    // source itself is unreachable here, so the answer is the explanation.
+    assertNotNull(this.updateCheckFacade.previewRule(request).getMessage());
+  }
+
+  @Test
   void refusesToCheckAComponentThatDoesNotExist() {
     assertThrows(RuntimeException.class, () -> this.updateCheckFacade.check(UUID.randomUUID(), false));
   }
@@ -199,7 +227,7 @@ class UpdateCheckFacadeIntegrationTest extends AbstractIntegrationTest {
       request.setAptSuite("noble");
       request.setAptComponent("stable");
       request.setAptArchitecture("amd64");
-      request.setVersionStrategy(one.epicsoft.vc.enums.VersionStrategy.DEB_VERSION);
+      request.setVersionStrategy(VersionStrategy.DEB_VERSION);
     }
     return request;
   }

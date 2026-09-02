@@ -4,14 +4,16 @@ import {HttpErrorResponse} from '@angular/common/http';
 import {RouterLink} from '@angular/router';
 import {NgbModal} from '@ng-bootstrap/ng-bootstrap';
 import {TranslatePipe} from '@ngx-translate/core';
-import {forkJoin, Subscription} from 'rxjs';
+import {catchError, forkJoin, of, Subscription} from 'rxjs';
 import {ComponentDto} from '../../repositories/dto/component.dto';
 import {ComponentEnvironmentDto, ComponentEnvironmentRequest} from '../../repositories/dto/component-environment.dto';
 import {EnvironmentDto} from '../../repositories/dto/environment.dto';
+import {UpdateCheckDto} from '../../repositories/dto/update-check.dto';
 import {VersionChangeDto} from '../../repositories/dto/version-change.dto';
 import {ComponentRepo} from '../../repositories/api/component.repo';
 import {ComponentEnvironmentRepo} from '../../repositories/api/component-environment.repo';
 import {EnvironmentRepo} from '../../repositories/api/environment.repo';
+import {UpdateCheckRepo} from '../../repositories/api/update-check.repo';
 import {VersionChangeRepo} from '../../repositories/api/version-change.repo';
 import {VersionChangeDialogComponent} from '../../components/version-change-dialog/version-change-dialog.component';
 import {isDefined, nonBlank, unsubscribe} from '../../libs/utils/vc.utils';
@@ -43,6 +45,7 @@ export class ComponentDetailComponent implements OnDestroy {
   private readonly environmentRepo: EnvironmentRepo = inject(EnvironmentRepo);
   private readonly componentEnvironmentRepo: ComponentEnvironmentRepo = inject(ComponentEnvironmentRepo);
   private readonly versionChangeRepo: VersionChangeRepo = inject(VersionChangeRepo);
+  private readonly updateCheckRepo: UpdateCheckRepo = inject(UpdateCheckRepo);
   private readonly modal: NgbModal = inject(NgbModal);
   private readonly subs: Subscription[] = [];
 
@@ -54,6 +57,8 @@ export class ComponentDetailComponent implements OnDestroy {
   protected component?: ComponentDto;
   protected rows: EnvironmentRow[] = [];
   protected history: VersionChangeDto[] = [];
+  protected check?: UpdateCheckDto;
+  protected checking = false;
   protected loading = true;
   protected errorMessage?: string;
 
@@ -111,6 +116,28 @@ export class ComponentDetailComponent implements OnDestroy {
     }));
   }
 
+  /**
+   * Asks the source now. The server applies the same minimum interval as the
+   * scheduler, so a refusal is an answer and gets shown like any other.
+   */
+  protected checkNow(): void {
+    if (!isDefined(this.component) || this.checking) {
+      return;
+    }
+    this.checking = true;
+    this.errorMessage = undefined;
+    this.subs.push(this.updateCheckRepo.checkNow(this.component.id).subscribe({
+      next: (check) => {
+        this.check = check;
+        this.checking = false;
+      },
+      error: (error: HttpErrorResponse) => {
+        this.checking = false;
+        this.showError(error);
+      }
+    }));
+  }
+
   private load(): void {
     if (!isDefined(this.componentId)) {
       return;
@@ -128,9 +155,16 @@ export class ComponentDetailComponent implements OnDestroy {
     this.subs.push(forkJoin({
       environments: this.environmentRepo.findAllByProject(component.projectId),
       cells: this.componentEnvironmentRepo.findAllByComponent(component.id),
-      history: this.versionChangeRepo.findAllByComponent(component.id)
+      history: this.versionChangeRepo.findAllByComponent(component.id),
+      // Caught here, not by the shared handler: the check block is extra
+      // information, and losing it must not take the name, the environments and
+      // the whole history down with it.
+      checks: this.updateCheckRepo.findAllByComponent(component.id).pipe(catchError(() => of([])))
     }).subscribe({
       next: (loaded) => {
+        // Never checked is an empty list, not an error: it is the state every
+        // component starts in.
+        this.check = loaded.checks.at(0);
         this.rows = loaded.environments.map((environment) => new EnvironmentRow({
           environment: environment,
           cell: loaded.cells.find((cell) => cell.environmentId === environment.id)
@@ -150,6 +184,7 @@ export class ComponentDetailComponent implements OnDestroy {
     this.component = undefined;
     this.rows = [];
     this.history = [];
+    this.check = undefined;
     this.loading = false;
     this.showError(error);
   }

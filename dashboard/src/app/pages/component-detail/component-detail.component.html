@@ -46,6 +46,68 @@
   </section>
 
   <section class="mb-4">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <h2 class="h6 text-uppercase text-secondary mb-0">{{ 'check.section' | translate }}</h2>
+      <button type="button" class="btn btn-sm btn-outline-primary" [disabled]="checking" (click)="checkNow()">
+        {{ 'check.action.checkNow' | translate }}
+      </button>
+    </div>
+
+    @if (check) {
+      <dl class="row mb-0 small">
+        <dt class="col-sm-3">{{ 'check.field.state' | translate }}</dt>
+        <dd class="col-sm-9">
+          @switch (check.checkState) {
+            @case ('OK') {
+              <span class="badge text-bg-success">{{ 'check.state.OK' | translate }}</span>
+            }
+            @case ('ERROR') {
+              <span class="badge text-bg-danger">{{ 'check.state.ERROR' | translate }}</span>
+            }
+            @default {
+              <span class="badge text-bg-secondary">{{ 'check.state.NOT_APPLICABLE' | translate }}</span>
+            }
+          }
+        </dd>
+
+        <dt class="col-sm-3">{{ 'check.field.latestVersion' | translate }}</dt>
+        <dd class="col-sm-9">
+          {{ check.latestVersion || dash }}
+          @if (check.latestReleasedAt) {
+            <span class="text-secondary ms-1">({{ check.latestReleasedAt | date: 'mediumDate' }})</span>
+          }
+        </dd>
+
+        @if (check.packages.length > 0) {
+          <dt class="col-sm-3">{{ 'component.field.packages' | translate }}</dt>
+          <dd class="col-sm-9">
+            @for (entry of check.packages; track entry.packageName) {
+              <div><code>{{ entry.packageName }}</code> {{ entry.latestVersion }}</div>
+            }
+          </dd>
+        }
+
+        <dt class="col-sm-3">{{ 'check.field.checkedAt' | translate }}</dt>
+        <dd class="col-sm-9">{{ check.checkedAt | date: 'medium' }}</dd>
+
+        @if (check.checkState === 'ERROR') {
+          <dt class="col-sm-3">{{ 'check.field.errorMessage' | translate }}</dt>
+          <dd class="col-sm-9">
+            <span class="text-danger-emphasis">{{ check.errorMessage }}</span>
+            @if (check.lastSuccessfulCheckAt) {
+              <div class="text-secondary">
+                {{ 'check.lastSuccess' | translate }}: {{ check.lastSuccessfulCheckAt | date: 'medium' }}
+              </div>
+            }
+          </dd>
+        }
+      </dl>
+    } @else {
+      <p class="text-secondary mb-0">{{ 'check.never' | translate }}</p>
+    }
+  </section>
+
+  <section class="mb-4">
     <h2 class="h6 text-uppercase text-secondary">{{ 'component.section.environments' | translate }}</h2>
     <table class="table table-sm align-middle">
       <thead>
