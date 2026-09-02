@@ -64,6 +64,24 @@ public class AppValidationException extends AppException {
                                       "error.checkTooSoon");
   }
 
+  /** BLOCKED comes from the dependency check; by hand it would never clear. */
+  @Nonnull
+  public static AppValidationException decisionNotSettable(@Nonnull final UUID componentId) {
+    return new AppValidationException("State BLOCKED cannot be set by hand for component '%s'".formatted(componentId),
+                                      "error.decisionNotSettable");
+  }
+
+  /**
+   * A postponement without a date, or with one that has passed, is a note nobody
+   * comes back to — which is the state this feature exists to replace.
+   */
+  @Nonnull
+  public static AppValidationException snoozeDateRequired(@Nonnull final UUID componentId) {
+    return new AppValidationException(
+        "Postponing component '%s' needs a date in the future to come back on".formatted(componentId),
+        "error.snoozeDateRequired");
+  }
+
   /** A cell marked as deliberately absent cannot carry a deployed version. */
   @Nonnull
   public static AppValidationException inactiveCell(@Nonnull final UUID componentEnvironmentId) {

@@ -202,3 +202,24 @@ CREATE TABLE update_check_package
         FOREIGN KEY (update_check_id) REFERENCES update_check (id) ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX UQ_update_check_package_check_name ON update_check_package (update_check_id, package_name);
+
+-- What somebody decided about an available update. One row per component,
+-- overwritten; the reasoning that has to survive belongs to the version change.
+CREATE TABLE update_decision
+(
+    id                  UUID         NOT NULL,
+    component_id        UUID         NOT NULL,
+    state               VARCHAR(32)  NOT NULL,
+    -- The version the decision was made about. A newer one resets the decision
+    -- to OPEN: a snooze on 17.1 must not silently swallow 17.5 as well.
+    decided_for_version VARCHAR(200),
+    snooze_until        TIMESTAMP(6),
+    note                TEXT,
+    release_url         VARCHAR(500),
+    decided_at          TIMESTAMP(6) NOT NULL,
+    created             TIMESTAMP(6) NOT NULL,
+    updated             TIMESTAMP(6),
+    CONSTRAINT PK_update_decision PRIMARY KEY (id),
+    CONSTRAINT FK_update_decision_component FOREIGN KEY (component_id) REFERENCES component (id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX UQ_update_decision_component ON update_decision (component_id);

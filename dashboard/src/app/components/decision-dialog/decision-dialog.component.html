@@ -1,0 +1,52 @@
+<div class="modal-header">
+  <h5 class="modal-title">{{ 'decision.title' | translate }}</h5>
+  <button type="button" class="btn-close" (click)="cancel()"></button>
+</div>
+
+<div class="modal-body">
+  <p class="text-secondary small mb-3">
+    {{ componentName }}
+    @if (latestVersion) {
+      &middot; {{ 'check.field.latestVersion' | translate }}: {{ latestVersion }}
+    }
+  </p>
+
+  @if (errorMessage) {
+    <div class="alert alert-danger py-2">{{ errorMessage }}</div>
+  }
+
+  <div class="mb-3">
+    <label class="form-label" for="decisionState">{{ 'decision.field.state' | translate }}</label>
+    <select class="form-select" id="decisionState" name="decisionState" [(ngModel)]="state">
+      @for (option of states; track option) {
+        <option [value]="option">{{ 'decisionState.' + option | translate }}</option>
+      }
+    </select>
+  </div>
+
+  @if (needsDate()) {
+    <div class="mb-3">
+      <label class="form-label" for="snoozeUntil">{{ 'decision.field.snoozeUntil' | translate }}</label>
+      <input type="date" class="form-control" id="snoozeUntil" name="snoozeUntil" [min]="today()"
+             [(ngModel)]="snoozeUntil">
+      <div class="form-text">{{ 'decision.snoozeHint' | translate }}</div>
+    </div>
+  }
+
+  <div class="mb-3">
+    <label class="form-label" for="decisionNote">{{ 'decision.field.note' | translate }}</label>
+    <textarea class="form-control" id="decisionNote" name="decisionNote" rows="3" [(ngModel)]="note"></textarea>
+  </div>
+
+  <div class="mb-1">
+    <label class="form-label" for="releaseUrl">{{ 'decision.field.releaseUrl' | translate }}</label>
+    <input type="url" class="form-control" id="releaseUrl" name="releaseUrl" [(ngModel)]="releaseUrl">
+  </div>
+</div>
+
+<div class="modal-footer">
+  <button type="button" class="btn btn-outline-secondary" (click)="cancel()">{{ 'common.cancel' | translate }}</button>
+  <button type="button" class="btn btn-primary" [disabled]="!canSave()" (click)="save()">
+    {{ 'common.save' | translate }}
+  </button>
+</div>

@@ -75,6 +75,7 @@ public class UpdateCheckFacade {
   private final CheckProperties checkProperties;
   private final ProjectService projectService;
   private final UpdateCheckMapper updateCheckMapper;
+  private final UpdateDecisionFacade updateDecisionFacade;
   private final List<SourceAdapter> adapters;
 
   /**
@@ -243,6 +244,13 @@ public class UpdateCheckFacade {
     component.setCheckFailureCount(0);
     component.setNextCheckDue(this.nextDue(this.checkProperties.getDefaultInterval(), now, true));
     this.componentService.save(component);
+
+    // A decision covers the version it was made about. Reopening it here, in the
+    // transaction that stores the newer one, is what keeps a postponement of
+    // 17.1 from quietly swallowing 17.5 as well.
+    if (nonBlank(check.getLatestVersion())) {
+      this.updateDecisionFacade.reopenIfNewerVersion(component.getId(), check.getLatestVersion());
+    }
     return this.updateCheckService.save(check);
   }
 
