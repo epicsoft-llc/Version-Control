@@ -11,7 +11,7 @@ epicsoftDepsUpdate = "0.2.5"
 #### https://gitlab.com/epicsoft-networks/gradle-plugin-tolgee
 epicsoftTolgee = "1.0.2"
 #### https://mvnrepository.com/artifact/org.projectlombok/lombok
-lombok = "1.18.46"
+lombok = "1.18.48"
 #### https://mvnrepository.com/artifact/org.mapstruct/mapstruct
 mapstruct = "1.6.3"
 #### https://mvnrepository.com/artifact/org.projectlombok/lombok-mapstruct-binding
