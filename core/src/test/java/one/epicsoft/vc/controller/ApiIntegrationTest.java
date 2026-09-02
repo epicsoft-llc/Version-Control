@@ -94,6 +94,29 @@ class ApiIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void answersNotFoundForTheMatrixOfAnUnknownProject() throws Exception {
+    // An empty matrix would read as a project without components.
+    this.mockMvc.perform(get("/api/v1/projects/{id}/matrix", UUID.randomUUID()))
+                .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void answersNotFoundWhenAVersionIsChangedOnAnUnknownCell() throws Exception {
+    this.mockMvc.perform(post("/api/v1/version-changes")
+                             .contentType(MediaType.APPLICATION_JSON)
+                             .content("{\"componentEnvironmentId\":\"%s\",\"toVersion\":\"1.0\"}"
+                                          .formatted(UUID.randomUUID())))
+                .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void answersBadRequestWhenTheHistoryIsAskedForWithoutAFilter() throws Exception {
+    // Every change ever recorded is not a list anybody asked for.
+    this.mockMvc.perform(get("/api/v1/version-changes"))
+                .andExpect(status().isBadRequest());
+  }
+
+  @Test
   void answersMethodNotAllowedForTheWrongVerb() throws Exception {
     this.mockMvc.perform(post("/api/v1/projects/{id}", UUID.randomUUID())
                              .contentType(MediaType.APPLICATION_JSON)

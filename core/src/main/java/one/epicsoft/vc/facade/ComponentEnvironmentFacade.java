@@ -80,6 +80,9 @@ public class ComponentEnvironmentFacade {
           final ComponentEnvironmentEntity created = new ComponentEnvironmentEntity();
           created.setComponent(component);
           created.setEnvironment(environment);
+          // Active from the start, and set here rather than left to @PrePersist:
+          // the guards below read the flag long before anything is written.
+          created.setActive(Boolean.TRUE);
           return created;
         });
 
@@ -106,6 +109,12 @@ public class ComponentEnvironmentFacade {
       // only `active` is toggled — must not move the timestamp away from the
       // deployment it records.
       return;
+    }
+    if (!entity.isActive()) {
+      // The same invariant the version dialog enforces: a cell marked as
+      // deliberately absent cannot also carry a deployed version. Switching an
+      // existing cell off keeps the version it had — that one is history.
+      throw AppValidationException.inactiveCell(entity.getComponentId(), entity.getEnvironmentId());
     }
     entity.setCurrentVersion(version);
     entity.setLastChangedAt(Instant.now());

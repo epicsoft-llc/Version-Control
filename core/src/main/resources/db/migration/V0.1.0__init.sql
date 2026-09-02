@@ -130,3 +130,33 @@ CREATE TABLE component_environment_package
 );
 CREATE UNIQUE INDEX UQ_component_environment_package_ce_name
     ON component_environment_package (component_environment_id, package_name);
+
+-- The history entry. Written only together with a version change, in the same
+-- transaction, and never deleted with the record it belongs to — which is why
+-- component_environment is soft deleted rather than removed.
+CREATE TABLE version_change
+(
+    id                       UUID         NOT NULL,
+    component_environment_id UUID         NOT NULL,
+    -- Not a single tag but the summary of an action: five packages with Debian
+    -- version strings run past any length one would pick, and a change that
+    -- cannot be saved because of a column width is the worst way to find out.
+    from_version             TEXT,
+    to_version               TEXT         NOT NULL,
+    changed_at               TIMESTAMP(6) NOT NULL,
+    note                     TEXT,
+    -- Deliberately a checkbox that starts at "no": an uncomfortable checkbox
+    -- gets more attention than a free text field that stays empty.
+    backup_taken             BOOLEAN      NOT NULL,
+    backup_ref               VARCHAR(500),
+    rollback_path            TEXT,
+    downtime_minutes         INTEGER,
+    issues                   TEXT,
+    created                  TIMESTAMP(6) NOT NULL,
+    updated                  TIMESTAMP(6),
+    CONSTRAINT PK_version_change PRIMARY KEY (id),
+    CONSTRAINT FK_version_change_component_environment
+        FOREIGN KEY (component_environment_id) REFERENCES component_environment (id)
+);
+CREATE INDEX IX_version_change_component_environment
+    ON version_change (component_environment_id, changed_at DESC);

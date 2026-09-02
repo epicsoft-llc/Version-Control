@@ -19,6 +19,7 @@ import one.epicsoft.vc.service.ProjectService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -118,7 +119,23 @@ public class ComponentFacade {
       packages.add(entity);
       position++;
     }
+    this.markLeadingPackage(packages);
     this.componentService.replacePackages(component, packages);
+  }
+
+  /**
+   * The matrix cell of a multi package component shows the leading one, and the
+   * version dialog writes it there. Without a package carrying the flag the cell
+   * would stay empty for good, however many versions are recorded — so the first
+   * package in the configured order takes the role until someone picks another.
+   */
+  private void markLeadingPackage(@Nonnull final List<ComponentPackageEntity> packages) {
+    if (packages.isEmpty() || packages.stream().anyMatch(ComponentPackageEntity::isLeadingPackage)) {
+      return;
+    }
+    packages.stream()
+            .min(Comparator.comparing(ComponentPackageEntity::getSortOrder))
+            .ifPresent(entry -> entry.setLeadingPackage(Boolean.TRUE));
   }
 
   /** One query for the packages of all components instead of one per component. */

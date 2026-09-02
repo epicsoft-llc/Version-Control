@@ -87,6 +87,22 @@ class GuardIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void refusesAVersionOnACellThatIsMarkedAsAbsent() {
+    final UUID projectId = this.project();
+    final ComponentDto component = this.componentFacade.create(this.componentRequest(projectId, "PostgreSQL"));
+    final EnvironmentDto environment = this.environment(projectId, "Production");
+
+    final ComponentEnvironmentRequest request = new ComponentEnvironmentRequest();
+    request.setComponentId(component.getId());
+    request.setEnvironmentId(environment.getId());
+    request.setActive(Boolean.FALSE);
+    request.setCurrentVersion("17.2");
+
+    // The dialog refuses this; the master data path must not create it either.
+    assertThrows(AppValidationException.class, () -> this.componentEnvironmentFacade.createOrUpdate(request));
+  }
+
+  @Test
   void refusesADuplicateName() {
     final UUID projectId = this.project();
     this.componentFacade.create(this.componentRequest(projectId, "PostgreSQL"));

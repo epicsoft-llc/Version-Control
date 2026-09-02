@@ -72,4 +72,9 @@ public class ComponentEnvironmentService {
     }
     return this.componentEnvironmentPackageRepository.findAllByComponentEnvironmentIdInOrderByPackageNameAsc(componentEnvironmentIds);
   }
+
+  @Nonnull
+  public List<ComponentEnvironmentPackageEntity> savePackages(@Nonnull final List<ComponentEnvironmentPackageEntity> entities) {
+    return this.componentEnvironmentPackageRepository.saveAll(entities);
+  }
 }

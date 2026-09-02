@@ -95,6 +95,13 @@ checked ones. Read-only methods add `readOnly = true`.
 
 `@Scheduled` methods live in the `job` package in a class suffixed `Job`, never on a service.
 
+A facade method that lists by a foreign id **reads that entity first**. An unknown or soft deleted id has
+to answer 404; an empty list would tell the reader that nothing is there, which is a different and wrong
+statement. The same holds for a derived view: it reads its root before assembling.
+
+Where two paths can write the same state, the invariant belongs on **both**. A guard that only sits on
+the newer path leaves the older one producing exactly the state the guard declares impossible.
+
 ### Packages
 
 ```
@@ -144,6 +151,14 @@ and enforces nothing at runtime.
 One class per domain concept, extending `AppException`, with a private constructor and static factories
 named `by{Criteria}`. The exception message is English and for the log; the message key it carries is
 what the user sees, translated.
+
+### Logging
+
+English, `@Slf4j`, and never a value that only belongs in the database. A controller logs the
+identifiers of a request, not the request object, as soon as the payload carries free text: a note, a
+rollback path or a backup reference routinely holds host names and snapshot ids, and a log file is read
+by more people, and kept in more places, than the table it came from. Payloads that are nothing but
+identifiers and enums may be logged whole.
 
 ### Migrations
 

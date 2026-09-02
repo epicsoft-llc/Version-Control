@@ -3,8 +3,10 @@ package one.epicsoft.vc.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import one.epicsoft.vc.dto.MatrixDto;
 import one.epicsoft.vc.dto.ProjectDto;
 import one.epicsoft.vc.dto.ProjectRequest;
+import one.epicsoft.vc.facade.MatrixFacade;
 import one.epicsoft.vc.facade.ProjectFacade;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -30,6 +32,7 @@ public class ProjectController {
   public static final String PATH_PREFIX = "api/v1/projects";
 
   private final ProjectFacade projectFacade;
+  private final MatrixFacade matrixFacade;
 
   @GetMapping(consumes = MediaType.ALL_VALUE)
   public ResponseEntity<List<ProjectDto>> findAll() {
@@ -41,6 +44,13 @@ public class ProjectController {
   public ResponseEntity<ProjectDto> getById(@PathVariable final UUID id) {
     log.debug("Incoming GET 'api/v1/projects/{}'", id);
     return ResponseEntity.ok(this.projectFacade.getById(id));
+  }
+
+  /** The version overview: components as rows, environments as columns. */
+  @GetMapping(path = "/{id}/matrix", consumes = MediaType.ALL_VALUE)
+  public ResponseEntity<MatrixDto> getMatrix(@PathVariable final UUID id) {
+    log.debug("Incoming GET matrix of project {}", id);
+    return ResponseEntity.ok(this.matrixFacade.getByProject(id));
   }
 
   @PostMapping

@@ -37,6 +37,37 @@ public class AppValidationException extends AppException {
     return new AppValidationException("Package '%s' is listed twice".formatted(name), "error.duplicatePackage");
   }
 
+  @Nonnull
+  public static AppValidationException unknownPackage(@Nonnull final String name) {
+    return new AppValidationException("Package '%s' is not configured for this component".formatted(name),
+                                      "error.unknownPackage");
+  }
+
+  /** An entry that records no change would be noise in the one list that must stay readable. */
+  @Nonnull
+  public static AppValidationException versionUnchanged(@Nonnull final UUID componentEnvironmentId,
+                                                        @Nonnull final String version) {
+    return new AppValidationException("Version '%s' of '%s' is already the recorded one"
+                                          .formatted(version, componentEnvironmentId),
+                                      "error.versionUnchanged");
+  }
+
+  /** A cell marked as deliberately absent cannot carry a deployed version. */
+  @Nonnull
+  public static AppValidationException inactiveCell(@Nonnull final UUID componentEnvironmentId) {
+    return new AppValidationException("Component environment '%s' is inactive and holds no version"
+                                          .formatted(componentEnvironmentId),
+                                      "error.inactiveCell");
+  }
+
+  /** The same refusal for a cell that is being created and has no id yet. */
+  @Nonnull
+  public static AppValidationException inactiveCell(@Nonnull final UUID componentId, @Nonnull final UUID environmentId) {
+    return new AppValidationException("Component '%s' is inactive in environment '%s' and holds no version"
+                                          .formatted(componentId, environmentId),
+                                      "error.inactiveCell");
+  }
+
   /**
    * Changing a version that is already recorded belongs in the dialog that writes
    * the history entry in the same step — there is deliberately no second way in.
