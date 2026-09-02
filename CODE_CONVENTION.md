@@ -195,6 +195,19 @@ and `@for` with a `track` expression, never `*ngIf` / `*ngFor`.
 
 Subscriptions are collected in a `subs` array and released in `ngOnDestroy` through `unsubscribe(...)`.
 
+### Requests in components
+
+Every subscription that can fail carries an `error` branch. A failed request must clear the loading flag
+it set and put the server's translated message on screen — without that the page keeps a spinner or, worse,
+renders nothing at all and says nothing.
+
+State that belongs to a selection is cleared **before** the request that refreshes it, not after it
+arrives. The previous project's rows under the new project's heading read as the new project's state, and
+the buttons in those rows then act on records the reader is no longer looking at.
+
+Where a selection can be changed faster than the server answers, the selection goes through a `Subject`
+and `switchMap` rather than a fresh `subscribe` per click: the older answer would otherwise land last.
+
 ### Null checks
 
 `isDefined(value)` and `notDefined(value)` from `libs/utils/vc.utils`, never truthiness — `0` and `''`

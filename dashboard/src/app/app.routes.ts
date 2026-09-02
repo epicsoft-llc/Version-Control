@@ -9,6 +9,11 @@ export const routes: Routes = [
   {path: 'tasks', loadComponent: () => import('./pages/tasks/tasks.component').then((m) => m.TasksComponent)},
   {path: 'matrix', loadComponent: () => import('./pages/matrix/matrix.component').then((m) => m.MatrixComponent)},
   {
+    path: 'components/:id',
+    loadComponent: () => import('./pages/component-detail/component-detail.component')
+      .then((m) => m.ComponentDetailComponent)
+  },
+  {
     path: 'master-data',
     loadComponent: () => import('./pages/master-data/master-data.component').then((m) => m.MasterDataComponent)
   },

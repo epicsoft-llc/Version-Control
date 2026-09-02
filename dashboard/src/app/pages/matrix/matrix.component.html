@@ -1,2 +1,92 @@
-<h1 class="h4 mb-3">{{ 'nav.matrix' | translate }}</h1>
-<p class="text-secondary">{{ 'matrix.empty' | translate }}</p>
+<div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+  <h1 class="h4 mb-0">{{ 'nav.matrix' | translate }}</h1>
+  @if (projects.length > 1) {
+    <select class="form-select form-select-sm w-auto"
+            name="project"
+            [ngModel]="selectedProjectId"
+            (ngModelChange)="selectProject($event)">
+      @for (project of projects; track project.id) {
+        <option [value]="project.id">{{ project.name }}</option>
+      }
+    </select>
+  }
+</div>
+
+@if (errorMessage) {
+  <div class="alert alert-danger py-2">{{ errorMessage }}</div>
+}
+
+@if (!loading && projects.length === 0) {
+  <p class="text-secondary">{{ 'matrix.noProjects' | translate }}</p>
+} @else if (matrix && matrix.rows.length === 0) {
+  <p class="text-secondary">{{ 'matrix.empty' | translate }}</p>
+} @else if (matrix) {
+  <div class="table-responsive">
+    <table class="table table-sm align-middle vc-matrix">
+      <thead>
+      <tr>
+        <th scope="col">{{ 'matrix.column.component' | translate }}</th>
+        @for (environment of matrix.environments; track environment.id) {
+          <th scope="col">
+            {{ environment.name }}
+            @if (environment.production) {
+              <i class="bi bi-broadcast text-secondary ms-1" [title]="'matrix.production' | translate"></i>
+            }
+          </th>
+        }
+      </tr>
+      </thead>
+      <tbody>
+        @for (row of matrix.rows; track row.componentId) {
+          <tr>
+            <th scope="row" class="fw-normal">
+              <a [routerLink]="['/components', row.componentId]">{{ row.componentName }}</a>
+              @if (row.deviating) {
+                <i class="bi bi-arrow-left-right text-warning ms-1" [title]="'matrix.deviating' | translate"></i>
+              }
+            </th>
+
+            @for (cell of row.cells; track cell.environmentId) {
+              <td [class.table-warning]="cell.deviating">
+                @switch (cell.state) {
+                  @case ('RECORDED') {
+                    @if (cell.lastChangedAt) {
+                      <button type="button"
+                              class="btn btn-link btn-sm p-0 text-decoration-none"
+                              [title]="('matrix.lastChanged' | translate) + ': ' + (cell.lastChangedAt | date: 'medium')"
+                              (click)="openVersionChange(row.componentId, cell)">{{ cell.currentVersion }}
+                      </button>
+                    } @else {
+                      <button type="button"
+                              class="btn btn-link btn-sm p-0 text-decoration-none"
+                              (click)="openVersionChange(row.componentId, cell)">{{ cell.currentVersion }}
+                      </button>
+                    }
+                    @if (cell.movingTag) {
+                      <i class="bi bi-exclamation-triangle text-warning ms-1"
+                         [title]="'matrix.movingTag' | translate"></i>
+                    }
+                  }
+                  @case ('UNKNOWN') {
+                    <button type="button"
+                            class="btn btn-link btn-sm p-0 text-decoration-none link-secondary fst-italic"
+                            [title]="'matrix.cell.unknown' | translate"
+                            (click)="openVersionChange(row.componentId, cell)">
+                      {{ 'matrix.cell.unknownShort' | translate }}
+                    </button>
+                  }
+                  @case ('INACTIVE') {
+                    <span class="text-secondary opacity-50" [title]="'matrix.cell.inactive' | translate">&ndash;</span>
+                  }
+                  @default {
+                    <span class="text-secondary opacity-25" [title]="'matrix.cell.notRecorded' | translate">&middot;</span>
+                  }
+                }
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

@@ -1,0 +1,79 @@
+<div class="modal-header">
+  <h5 class="modal-title">{{ 'versionChange.title' | translate }}</h5>
+  <button type="button" class="btn-close" (click)="cancel()"></button>
+</div>
+
+<div class="modal-body">
+  <p class="text-secondary small mb-3">{{ component.name }} &middot; {{ environmentName }}</p>
+
+  @if (errorMessage) {
+    <div class="alert alert-danger py-2">{{ errorMessage }}</div>
+  }
+
+  @if (hasPackages()) {
+    <p class="small text-secondary">{{ 'versionChange.packagesHint' | translate }}</p>
+    @for (field of packageFields; track field.packageName) {
+      <div class="mb-3">
+        <label class="form-label" [for]="'package-' + field.packageName">{{ field.packageName }}</label>
+        <input type="text"
+               class="form-control"
+               [id]="'package-' + field.packageName"
+               [name]="'package-' + field.packageName"
+               [(ngModel)]="field.version"
+               [placeholder]="field.currentVersion ?? ''">
+        <div class="form-text">
+          {{ 'versionChange.currentVersion' | translate }}:
+          {{ field.currentVersion ?? ('versionChange.noVersionYet' | translate) }}
+        </div>
+      </div>
+    }
+  } @else {
+    <div class="mb-3">
+      <label class="form-label" for="toVersion">{{ 'versionChange.newVersion' | translate }}</label>
+      <input type="text" class="form-control" id="toVersion" name="toVersion" [(ngModel)]="toVersion">
+      <div class="form-text">
+        {{ 'versionChange.currentVersion' | translate }}:
+        {{ cell.currentVersion ?? ('versionChange.noVersionYet' | translate) }}
+      </div>
+    </div>
+  }
+
+  <div class="mb-3">
+    <label class="form-label" for="note">{{ 'versionChange.note' | translate }}</label>
+    <textarea class="form-control" id="note" name="note" rows="2" [(ngModel)]="note"></textarea>
+  </div>
+
+  <div class="form-check mb-2">
+    <input type="checkbox" class="form-check-input" id="backupTaken" name="backupTaken" [(ngModel)]="backupTaken">
+    <label class="form-check-label" for="backupTaken">{{ 'versionChange.backupTaken' | translate }}</label>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label" for="backupRef">{{ 'versionChange.backupRef' | translate }}</label>
+    <input type="text" class="form-control" id="backupRef" name="backupRef" [(ngModel)]="backupRef">
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label" for="rollbackPath">{{ 'versionChange.rollbackPath' | translate }}</label>
+    <textarea class="form-control" id="rollbackPath" name="rollbackPath" rows="2"
+              [(ngModel)]="rollbackPath"></textarea>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label" for="downtimeMinutes">{{ 'versionChange.downtimeMinutes' | translate }}</label>
+    <input type="number" class="form-control" id="downtimeMinutes" name="downtimeMinutes" min="0"
+           [(ngModel)]="downtimeMinutes">
+  </div>
+
+  <div class="mb-1">
+    <label class="form-label" for="issues">{{ 'versionChange.issues' | translate }}</label>
+    <textarea class="form-control" id="issues" name="issues" rows="2" [(ngModel)]="issues"></textarea>
+  </div>
+</div>
+
+<div class="modal-footer">
+  <button type="button" class="btn btn-outline-secondary" (click)="cancel()">{{ 'common.cancel' | translate }}</button>
+  <button type="button" class="btn btn-primary" [disabled]="!canSave()" (click)="save()">
+    {{ 'common.save' | translate }}
+  </button>
+</div>

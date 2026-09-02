@@ -1,0 +1,159 @@
+@if (errorMessage) {
+  <div class="alert alert-danger py-2">{{ errorMessage }}</div>
+}
+
+@if (component) {
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+    <h1 class="h4 mb-0">{{ component.name }}</h1>
+    <span class="badge text-bg-secondary">{{ 'sourceType.' + component.sourceType | translate }}</span>
+  </div>
+  <p class="text-secondary">
+    <a routerLink="/matrix">{{ 'nav.matrix' | translate }}</a>
+    @if (component.description) {
+      <span class="ms-2">{{ component.description }}</span>
+    }
+  </p>
+
+  <section class="mb-4">
+    <h2 class="h6 text-uppercase text-secondary">{{ 'component.section.source' | translate }}</h2>
+    <dl class="row mb-0 small">
+      <dt class="col-sm-3">{{ 'component.field.sourceRef' | translate }}</dt>
+      <dd class="col-sm-9">{{ component.sourceRef || dash }}</dd>
+
+      <dt class="col-sm-3">{{ 'component.field.versionStrategy' | translate }}</dt>
+      <dd class="col-sm-9">{{ 'versionStrategy.' + component.versionStrategy | translate }}</dd>
+
+      <dt class="col-sm-3">{{ 'component.field.tagPattern' | translate }}</dt>
+      <dd class="col-sm-9"><code>{{ component.tagPattern || dash }}</code></dd>
+
+      <dt class="col-sm-3">{{ 'component.field.maxStep' | translate }}</dt>
+      <dd class="col-sm-9">{{ 'maxStep.' + component.maxStep | translate }}</dd>
+
+      @if (component.packages.length > 0) {
+        <dt class="col-sm-3">{{ 'component.field.packages' | translate }}</dt>
+        <dd class="col-sm-9">
+          @for (entry of component.packages; track entry.id) {
+            <span class="me-2">
+              <code>{{ entry.name }}</code>
+              @if (entry.leadingPackage) {
+                <i class="bi bi-star-fill text-warning ms-1" [title]="'component.leadingPackage' | translate"></i>
+              }
+            </span>
+          }
+        </dd>
+      }
+    </dl>
+  </section>
+
+  <section class="mb-4">
+    <h2 class="h6 text-uppercase text-secondary">{{ 'component.section.environments' | translate }}</h2>
+    <table class="table table-sm align-middle">
+      <thead>
+      <tr>
+        <th scope="col">{{ 'component.column.environment' | translate }}</th>
+        <th scope="col">{{ 'component.column.version' | translate }}</th>
+        <th scope="col">{{ 'component.column.lastChanged' | translate }}</th>
+        <th scope="col" class="text-end">{{ 'component.column.actions' | translate }}</th>
+      </tr>
+      </thead>
+      <tbody>
+        @for (row of rows; track row.environment.id) {
+          <tr>
+            <th scope="row" class="fw-normal">{{ row.environment.name }}</th>
+            <td>
+              @if (row.cell && row.cell.active) {
+                @if (row.cell.currentVersion) {
+                  {{ row.cell.currentVersion }}
+                  @if (row.cell.movingTag) {
+                    <i class="bi bi-exclamation-triangle text-warning ms-1"
+                       [title]="'matrix.movingTag' | translate"></i>
+                  }
+                } @else {
+                  <span class="text-secondary fst-italic">{{ 'matrix.cell.unknown' | translate }}</span>
+                }
+              } @else if (row.cell) {
+                <span class="text-secondary opacity-50">{{ 'matrix.cell.inactive' | translate }}</span>
+              } @else {
+                <span class="text-secondary opacity-50">{{ 'matrix.cell.notRecorded' | translate }}</span>
+              }
+            </td>
+            <td class="text-secondary small">{{ row.cell?.lastChangedAt | date: 'medium' }}</td>
+            <td class="text-end">
+              @if (row.cell && row.cell.active) {
+                <button type="button" class="btn btn-sm btn-outline-primary me-1"
+                        (click)="openVersionChange(row)">{{ 'component.action.changeVersion' | translate }}
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        (click)="setActive(row, false)">{{ 'component.action.deactivate' | translate }}
+                </button>
+              } @else {
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        (click)="setActive(row, true)">{{ 'component.action.activate' | translate }}
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2 class="h6 text-uppercase text-secondary">{{ 'component.section.history' | translate }}</h2>
+    @if (history.length === 0) {
+      <p class="text-secondary">{{ 'history.empty' | translate }}</p>
+    } @else {
+      <div class="table-responsive">
+        <table class="table table-sm">
+          <thead>
+          <tr>
+            <th scope="col">{{ 'history.column.changedAt' | translate }}</th>
+            <th scope="col">{{ 'component.column.environment' | translate }}</th>
+            <th scope="col">{{ 'history.column.change' | translate }}</th>
+            <th scope="col">{{ 'history.column.backup' | translate }}</th>
+            <th scope="col">{{ 'history.column.downtime' | translate }}</th>
+            <th scope="col">{{ 'history.column.note' | translate }}</th>
+          </tr>
+          </thead>
+          <tbody>
+            @for (entry of history; track entry.id) {
+              <tr>
+                <td class="text-nowrap">{{ entry.changedAt | date: 'short' }}</td>
+                <td>{{ environmentName(entry.environmentId) }}</td>
+                <td>
+                  @if (entry.fromVersion) {
+                    <span class="text-secondary">{{ entry.fromVersion }}</span>
+                    <i class="bi bi-arrow-right mx-1"></i>
+                  }
+                  {{ entry.toVersion }}
+                </td>
+                <td>
+                  @if (entry.backupTaken) {
+                    <i class="bi bi-check-lg text-success" [title]="'history.backupTaken' | translate"></i>
+                    @if (entry.backupRef) {
+                      <span class="small text-secondary ms-1">{{ entry.backupRef }}</span>
+                    }
+                  } @else {
+                    <i class="bi bi-dash text-secondary" [title]="'history.noBackup' | translate"></i>
+                  }
+                </td>
+                <td>{{ entry.downtimeMinutes }}</td>
+                <td class="small">
+                  {{ entry.note }}
+                  @if (entry.issues) {
+                    <div class="text-danger-emphasis">{{ entry.issues }}</div>
+                  }
+                  @if (entry.rollbackPath) {
+                    <div class="text-secondary">{{ entry.rollbackPath }}</div>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+} @else if (!loading) {
+  <p class="text-secondary">{{ 'component.notFound' | translate }}</p>
+}
