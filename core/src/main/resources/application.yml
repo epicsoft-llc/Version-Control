@@ -23,6 +23,9 @@ vc:
     bot-token: USE_ENV
     chat-id: USE_ENV
   scheduler:
+    #### Switched off in tests: a scheduled check would call upstream sources
+    #### from a test run, which is both slow and somebody else's traffic.
+    enabled: true
     tick-interval: 15m
   check:
     default-interval: 48h

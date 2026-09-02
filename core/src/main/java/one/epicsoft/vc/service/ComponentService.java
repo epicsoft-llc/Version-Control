@@ -8,7 +8,9 @@ import one.epicsoft.vc.jpa.entity.ComponentEntity;
 import one.epicsoft.vc.jpa.entity.ComponentPackageEntity;
 import one.epicsoft.vc.jpa.repository.ComponentPackageRepository;
 import one.epicsoft.vc.jpa.repository.ComponentRepository;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -45,6 +47,16 @@ public class ComponentService {
     entity.delete();
     this.componentRepository.save(entity);
     log.debug("Soft deleted component '{}'", entity.getId());
+  }
+
+  /**
+   * The components the scheduler may check now, longest overdue first.
+   *
+   * @param limit how many to take; the job takes exactly one per tick
+   */
+  @Nonnull
+  public List<ComponentEntity> findDue(@Nonnull final Instant now, final int limit) {
+    return this.componentRepository.findDue(now, PageRequest.of(0, limit));
   }
 
   @Nonnull

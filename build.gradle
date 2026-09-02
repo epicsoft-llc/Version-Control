@@ -44,6 +44,9 @@ subprojects {
   tasks.withType(JavaCompile).configureEach {
     options.encoding = "UTF-8"
     options.compilerArgs << "-parameters"
+    // Names the deprecated call instead of the note that one exists. A warning
+    // nobody can locate is a warning that stays.
+    options.compilerArgs << "-Xlint:deprecation"
   }
 
   // ###########################################################

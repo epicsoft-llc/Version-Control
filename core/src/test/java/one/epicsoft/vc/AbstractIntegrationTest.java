@@ -47,6 +47,9 @@ public abstract class AbstractIntegrationTest {
 
   @DynamicPropertySource
   static void datasource(final DynamicPropertyRegistry registry) {
+    // No scheduled check during a test run: it would call upstream sources for
+    // real, which is slow, flaky and somebody else's traffic.
+    registry.add("vc.scheduler.enabled", () -> Boolean.FALSE);
     if (POSTGRES == null) {
       return;
     }

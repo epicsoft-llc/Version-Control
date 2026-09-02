@@ -160,3 +160,45 @@ CREATE TABLE version_change
 );
 CREATE INDEX IX_version_change_component_environment
     ON version_change (component_environment_id, changed_at DESC);
+
+-- The result of the last check of a component. One row per component, overwritten
+-- every time; a history of checks would be noise, the history that matters hangs
+-- on the version change.
+CREATE TABLE update_check
+(
+    id                       UUID         NOT NULL,
+    component_id             UUID         NOT NULL,
+    latest_version           VARCHAR(200),
+    latest_released_at       TIMESTAMP(6),
+    latest_digest            VARCHAR(100),
+    checked_at               TIMESTAMP(6) NOT NULL,
+    -- OK, ERROR or NOT_APPLICABLE. A failed check is ERROR and never silently
+    -- "up to date" - that is the one failure mode that stays unnoticed for months.
+    check_state              VARCHAR(32)  NOT NULL,
+    error_message            TEXT,
+    last_successful_check_at TIMESTAMP(6),
+    -- The candidates of the last successful check, so the rule preview can run
+    -- without asking the source again inside the minimum interval.
+    candidate_tags           TEXT,
+    created                  TIMESTAMP(6) NOT NULL,
+    updated                  TIMESTAMP(6),
+    CONSTRAINT PK_update_check PRIMARY KEY (id),
+    CONSTRAINT FK_update_check_component FOREIGN KEY (component_id) REFERENCES component (id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX UQ_update_check_component ON update_check (component_id);
+
+-- One row per package of an APT component; latest_version on update_check itself
+-- carries the leading package.
+CREATE TABLE update_check_package
+(
+    id              UUID         NOT NULL,
+    update_check_id UUID         NOT NULL,
+    package_name    VARCHAR(200) NOT NULL,
+    latest_version  VARCHAR(200),
+    created         TIMESTAMP(6) NOT NULL,
+    updated         TIMESTAMP(6),
+    CONSTRAINT PK_update_check_package PRIMARY KEY (id),
+    CONSTRAINT FK_update_check_package_update_check
+        FOREIGN KEY (update_check_id) REFERENCES update_check (id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX UQ_update_check_package_check_name ON update_check_package (update_check_id, package_name);
