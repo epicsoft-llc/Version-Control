@@ -13,8 +13,30 @@ It is an inventory, not a deployment system. It runs no actions on target hosts,
 application dependencies (Renovate and Dependabot do that), and it does not read the deployed versions
 by itself: you enter them, in the same work step in which you upgrade the component.
 
-> **Status: early.** Everything described here is built and tested; the interface is not yet
-> translated in full, and the screenshots are still missing.
+> **Status: early.** Everything described here is built, tested and translated.
+
+## What it looks like
+
+The start page is the task list, not the matrix — it answers what needs doing, in a fixed order: out of
+support before merely behind, a check that has been failing for days before a cosmetic warning.
+
+![Task list](docs/images/tasks.jpg)
+
+The matrix is the second view: one row per component, one column per environment, and the newest
+available version at the end. Rows whose environments disagree are marked, a cell that is deliberately
+empty (`–`) is not the same as one nobody has filled in.
+
+![Version matrix](docs/images/matrix.jpg)
+
+A component page carries the source and its version rule, the last check, what may be upgraded to next
+per environment — and what would be a bigger jump than allowed, shown as a hint rather than a task —
+plus the dependencies in both directions, evaluated per environment.
+
+![Component detail](docs/images/component-detail.jpg)
+
+Projects, environments and components are maintained on one page.
+
+![Master data](docs/images/master-data.jpg)
 
 ## What it watches
 
@@ -57,11 +79,16 @@ cd dashboard
 npm ci
 npm start                      # dev server on :4200, API on localhost:8080
 npm run build
+npm test                       # unit tests, vitest in jsdom
+npm run i18n:verify            # every key used by the interface exists
 ```
 
 Unit tests run anywhere. Tests tagged `integration` start a PostgreSQL container through
 Testcontainers and are skipped automatically when no Docker daemon answers, so `./gradlew test` stays
 green on a machine without one.
+
+The dashboard tests run in jsdom through the Angular `unit-test` builder, so they need no browser and
+no display — `npm test` is the whole story, locally and in CI.
 
 ### Images
 

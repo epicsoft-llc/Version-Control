@@ -47,12 +47,10 @@ public final class TagRule {
     Pattern.compile("(?i).*[-.](rc|alpha|beta|preview|snapshot|dev|m)\\.?\\d*$");
 
   /**
-   * Digits, an optional Debian revision, and the usual prerelease markers —
-   * 1.2.3, 6.4.1-15, 2.0.0-rc.1. A variant suffix such as 17-alpine is left out
-   * on purpose: that tag moves.
+   * A suffix that says which build of a release this is, not which release —
+   * alpine, bookworm, jre, a Debian revision, a prerelease marker.
    */
-  private static final Pattern PINNED_VERSION =
-    Pattern.compile("^\\d+(\\.\\d+)*(-\\d+)?([-.](rc|alpha|beta|m)\\.?\\d*)?$");
+  private static final Pattern VARIANT = Pattern.compile("^[-.][0-9A-Za-z][0-9A-Za-z.~+-]*$");
 
   private TagRule() {
     // utility class
@@ -91,9 +89,29 @@ public final class TagRule {
    * recorded value changing with it. Everything that has to reason about the
    * version behind a tag has to know that, which is why the definition lives
    * here rather than once per caller.
+   *
+   * <p>What decides it is how far the number goes, not what follows it. A tag
+   * naming only the major moves with every release of that line — {@code 17},
+   * {@code 17-alpine} — while one that also names the minor is what the
+   * publisher stopped changing: {@code 17.2}, {@code 17.2-alpine},
+   * {@code v4.2.1}, {@code 5:29.7.2}, {@code 6.4.1-15}. Calling those moving
+   * puts a component that is pinned exactly as it should be on the task list
+   * every day, and a warning that is wrong every day is one nobody reads.
    */
   public static boolean isMovingTag(@Nullable final String tag) {
-    return nonBlank(tag) && !PINNED_VERSION.matcher(tag.trim()).matches();
+    if (!nonBlank(tag)) {
+      return false;
+    }
+    final Matcher matcher = TAG.matcher(tag.trim());
+    if (!matcher.matches()) {
+      // latest, stable: no number at all, so nothing pins it.
+      return true;
+    }
+    if (matcher.group(2).split("\\.").length < 2) {
+      return true;
+    }
+    final String suffix = matcher.group(3);
+    return !suffix.isEmpty() && !VARIANT.matcher(suffix).matches();
   }
 
   /** True when the tag looks like a preview rather than a release. */

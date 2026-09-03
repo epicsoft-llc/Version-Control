@@ -1,4 +1,4 @@
-import {Component, inject, OnDestroy, OnInit} from '@angular/core';
+import {ChangeDetectionStrategy, Component, inject, OnDestroy, OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {HttpErrorResponse} from '@angular/common/http';
 import {RouterLink} from '@angular/router';
@@ -59,6 +59,13 @@ export class PackageRow {
  * not spent on the views that are used daily.
  */
 @Component({
+  // Default, explicitly: this Angular version compiles a component as OnPush
+  // unless told otherwise, and these components hold their state in plain
+  // fields written from subscribe callbacks. Under OnPush such a view is
+  // never marked dirty, so every page renders its heading and then stays
+  // empty for good - with no error anywhere. Until the state is held in
+  // signals, the strategy has to say what the code assumes.
+  changeDetection: ChangeDetectionStrategy.Default,
   selector: 'vc-master-data',
   imports: [FormsModule, RouterLink, TranslatePipe],
   templateUrl: './master-data.component.html'

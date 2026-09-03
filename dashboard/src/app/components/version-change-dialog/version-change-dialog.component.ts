@@ -1,4 +1,4 @@
-import {Component, inject, OnDestroy, OnInit} from '@angular/core';
+import {ChangeDetectionStrategy, Component, inject, OnDestroy, OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {HttpErrorResponse} from '@angular/common/http';
 import {NgbActiveModal} from '@ng-bootstrap/ng-bootstrap';
@@ -30,6 +30,13 @@ export class PackageField {
  * part that pays off the next time the same upgrade comes round.
  */
 @Component({
+  // Default, explicitly: this Angular version compiles a component as OnPush
+  // unless told otherwise, and these components hold their state in plain
+  // fields written from subscribe callbacks. Under OnPush such a view is
+  // never marked dirty, so every page renders its heading and then stays
+  // empty for good - with no error anywhere. Until the state is held in
+  // signals, the strategy has to say what the code assumes.
+  changeDetection: ChangeDetectionStrategy.Default,
   selector: 'vc-version-change-dialog',
   imports: [FormsModule, TranslatePipe],
   templateUrl: './version-change-dialog.component.html'

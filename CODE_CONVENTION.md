@@ -152,6 +152,16 @@ One class per domain concept, extending `AppException`, with a private construct
 named `by{Criteria}`. The exception message is English and for the log; the message key it carries is
 what the user sees, translated.
 
+### Message keys
+
+A key that reaches a user is written in exactly two places: passed to an `AppException` factory in the
+`exception` package (or in `AppExceptionHandler`, which maps the framework's own errors), or handed to
+`TranslationService`. Nothing else composes one.
+
+That is not style, it is what makes the keys checkable: `verifyMessageKeys` collects them from those two
+places and compares them against the fallback bundle. A key built somewhere else is invisible to it, and
+an unknown key is not an error at runtime — the key itself is what the reader gets.
+
 ### Logging
 
 English, `@Slf4j`, and never a value that only belongs in the database. A controller logs the
@@ -198,6 +208,21 @@ Every class member has an explicit one:
 | Public API — inputs, outputs, exposed methods | `public` |
 
 Dependencies are injected with `inject()`, not through the constructor.
+
+### Change detection
+
+Every component names its strategy: `changeDetection: ChangeDetectionStrategy.Default`.
+
+That is not decoration. This Angular version compiles a component as **OnPush unless told otherwise**,
+and these components hold their state in plain fields written from `subscribe` callbacks. An OnPush view
+that nothing marks dirty keeps the page it first rendered — the application loads its data, shows a
+heading and nothing else, and reports no error anywhere. The application therefore also configures
+`provideZoneChangeDetection`, and `zone.js/plugins/zone-patch-fetch` is in the polyfills so an HTTP
+answer arrives inside the zone.
+
+The moment a component holds its state in signals, it may drop the strategy — that is the direction, not
+the state today. A test that lets Angular render on its own (`autoDetectChanges`, no manual
+`detectChanges`) guards the difference; without it every test passes while the application shows nothing.
 
 ### Components
 

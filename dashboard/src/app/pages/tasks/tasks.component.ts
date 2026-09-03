@@ -1,4 +1,4 @@
-import {Component, inject, OnDestroy, OnInit} from '@angular/core';
+import {ChangeDetectionStrategy, Component, inject, OnDestroy, OnInit} from '@angular/core';
 import {DatePipe} from '@angular/common';
 import {HttpErrorResponse} from '@angular/common/http';
 import {FormsModule} from '@angular/forms';
@@ -22,6 +22,13 @@ import {isDefined, unsubscribe} from '../../libs/utils/vc.utils';
  * warning. Sections without entries are not shown at all.
  */
 @Component({
+  // Default, explicitly: this Angular version compiles a component as OnPush
+  // unless told otherwise, and these components hold their state in plain
+  // fields written from subscribe callbacks. Under OnPush such a view is
+  // never marked dirty, so every page renders its heading and then stays
+  // empty for good - with no error anywhere. Until the state is held in
+  // signals, the strategy has to say what the code assumes.
+  changeDetection: ChangeDetectionStrategy.Default,
   selector: 'vc-tasks',
   imports: [DatePipe, FormsModule, RouterLink, TranslatePipe],
   templateUrl: './tasks.component.html'

@@ -85,7 +85,10 @@ TST:core:
   before_script:
     - chmod +x gradlew
   script:
-    - ./gradlew :core:test
+    #### check, not test: the offline verifications hang off `check`, and a job
+    #### that only runs the tests leaves them switched off in the one place
+    #### where nobody would notice.
+    - ./gradlew :core:check
   coverage: '/Total.*?([0-9]{1,3})%/'
   cache: *gradle-cache
   artifacts:
@@ -145,37 +148,57 @@ SEC:core:
 #### dashboard (frontend)
 ###############################################################################
 #### Without the VC_NPM_* variables npm uses the public registry.
+#### Shared by both dashboard jobs, so the registry setup cannot drift apart
+#### between the one that builds and the one that tests.
+.npm-setup: &npm-setup
+  - |
+    #### Credential keys are derived from the registry URL itself, so the two
+    #### cannot disagree — npm then finds no credentials and gets a 401.
+    #### Nothing here may print a value: job logs are public.
+    if [ -n "$VC_NPM_REGISTRY" ]; then
+      base="${VC_NPM_REGISTRY%/}/"
+      key="${base#http*:}"
+      {
+        echo "registry=$base"
+        echo "${key}:username=$VC_NPM_USERNAME"
+        echo "${key}:_password=$(printf '%s' "$VC_NPM_PASSWORD" | base64 | tr -d '\n')"
+      } > "$HOME/.npmrc"
+      unset NPM_CONFIG_REGISTRY
+      echo "npm: mirror configured"
+    else
+      echo "npm: public registry"
+    fi
+  - cd dashboard
+
 BLD:dashboard:
   stage: build
   image: ${NODE_IMAGE}
-  before_script:
-    - |
-      #### Credential keys are derived from the registry URL itself, so the two
-      #### cannot disagree — npm then finds no credentials and gets a 401.
-      #### Nothing here may print a value: job logs are public.
-      if [ -n "$VC_NPM_REGISTRY" ]; then
-        base="${VC_NPM_REGISTRY%/}/"
-        key="${base#http*:}"
-        {
-          echo "registry=$base"
-          echo "${key}:username=$VC_NPM_USERNAME"
-          echo "${key}:_password=$(printf '%s' "$VC_NPM_PASSWORD" | base64 | tr -d '\n')"
-        } > "$HOME/.npmrc"
-        unset NPM_CONFIG_REGISTRY
-        echo "npm: mirror configured"
-      else
-        echo "npm: public registry"
-      fi
-    - cd dashboard
+  before_script: *npm-setup
   script:
     - npm ci --no-audit --no-fund
     - node scripts/i18n-pull.mjs
+    #### After the pull, so it judges the state the build actually uses.
+    - npm run i18n:verify
     - npm run build
   cache: *node-cache
   artifacts:
     name: "vc-dashboard-${CI_COMMIT_REF_NAME}-${CI_PIPELINE_ID}"
     paths: [ "dashboard/dist" ]
     expire_in: 1h
+  retry: 1
+
+#### Runs in jsdom, so no browser and no display are needed in the job.
+TST:dashboard:
+  stage: test
+  image: ${NODE_IMAGE}
+  before_script: *npm-setup
+  script:
+    - npm ci --no-audit --no-fund
+    - npx ng test
+  cache:
+    <<: *node-cache
+    policy: pull
+  needs: [ "BLD:dashboard" ]
   retry: 1
 
 ###############################################################################

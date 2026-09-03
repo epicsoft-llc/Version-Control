@@ -1,4 +1,4 @@
-import {Component, inject, OnDestroy} from '@angular/core';
+import {ChangeDetectionStrategy, Component, inject, OnDestroy} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {HttpErrorResponse} from '@angular/common/http';
 import {NgbActiveModal} from '@ng-bootstrap/ng-bootstrap';
@@ -16,6 +16,13 @@ import {nonBlank, unsubscribe} from '../../libs/utils/vc.utils';
  * sentence sitting in the inventory three months later that nobody checks.
  */
 @Component({
+  // Default, explicitly: this Angular version compiles a component as OnPush
+  // unless told otherwise, and these components hold their state in plain
+  // fields written from subscribe callbacks. Under OnPush such a view is
+  // never marked dirty, so every page renders its heading and then stays
+  // empty for good - with no error anywhere. Until the state is held in
+  // signals, the strategy has to say what the code assumes.
+  changeDetection: ChangeDetectionStrategy.Default,
   selector: 'vc-decision-dialog',
   imports: [FormsModule, TranslatePipe],
   templateUrl: './decision-dialog.component.html'

@@ -14,6 +14,7 @@
     "watch": "ng build --watch --configuration=development",
     "test": "ng test",
     "i18n:pull": "node scripts/i18n-pull.mjs",
+    "i18n:verify": "node scripts/i18n-verify.mjs",
     "dep:update": "npm-check-updates --errorLevel 2"
   },
   "dependencies": {
@@ -37,7 +38,9 @@
     "@angular/build": "22.1.6",
     "@angular/cli": "22.1.6",
     "@angular/compiler-cli": "22.1.4",
+    "jsdom": "30.0.1",
     "npm-check-updates": "23.0.2",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
   }
 }

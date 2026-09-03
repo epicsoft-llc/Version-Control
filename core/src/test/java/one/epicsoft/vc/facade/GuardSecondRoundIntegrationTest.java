@@ -47,11 +47,29 @@ class GuardSecondRoundIntegrationTest extends AbstractIntegrationTest {
     assertFalse(entity.isMovingTag());
     entity.setCurrentVersion("6.4.1-15");
     assertFalse(entity.isMovingTag());
+    // A variant on a version that names its minor is pinned as well: the
+    // publisher stopped changing 1.29.2-alpine the day it appeared. Reported as
+    // moving, every alpine image in production would sit on the task list for
+    // good — and a warning that is wrong every day is one nobody reads.
+    entity.setCurrentVersion("1.29.2-alpine");
+    assertFalse(entity.isMovingTag());
+    entity.setCurrentVersion("17.2-alpine");
+    assertFalse(entity.isMovingTag());
+    // The v of a release tag and the epoch of a Debian version sit in front of
+    // the number without being part of it.
+    entity.setCurrentVersion("v4.2.1");
+    assertFalse(entity.isMovingTag());
+    entity.setCurrentVersion("5:29.7.2");
+    assertFalse(entity.isMovingTag());
 
-    // A variant suffix is a different thing: that tag gets rebuilt.
+    // Only the major named: that tag gets rebuilt with every release of the line.
     entity.setCurrentVersion("17-alpine");
     assertTrue(entity.isMovingTag());
+    entity.setCurrentVersion("17");
+    assertTrue(entity.isMovingTag());
     entity.setCurrentVersion("latest");
+    assertTrue(entity.isMovingTag());
+    entity.setCurrentVersion("stable-slim");
     assertTrue(entity.isMovingTag());
   }
 

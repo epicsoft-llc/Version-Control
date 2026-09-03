@@ -53,11 +53,14 @@
                 @for (constraint of entry.constraints; track $index) {
                   <div>
                     {{ constraint.componentName }}
-                    @if (constraint.actualVersion) {
-                      {{ constraint.actualVersion }}
-                    }
                     {{ 'dependency.needs' | translate }} {{ constraint.dependsOnName }}
                     <code>{{ constraint.versionRange }}</code>
+                    @if (constraint.actualVersion) {
+                      <!-- Behind the prerequisite, never behind the dependent: the version
+                           belongs to what is required, and in front it reads as the
+                           version of the component that needs it. -->
+                      <span class="ms-1">({{ constraint.actualVersion }})</span>
+                    }
                     <span class="badge ms-1"
                           [class.text-bg-danger]="constraint.state === 'VIOLATED'"
                           [class.text-bg-secondary]="constraint.state === 'UNKNOWN'">
