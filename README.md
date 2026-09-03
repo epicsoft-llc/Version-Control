@@ -13,7 +13,8 @@ It is an inventory, not a deployment system. It runs no actions on target hosts,
 application dependencies (Renovate and Dependabot do that), and it does not read the deployed versions
 by itself: you enter them, in the same work step in which you upgrade the component.
 
-> **Status: early.** The data model and the interface are being built. See `docs/` for what exists.
+> **Status: early.** Everything described here is built and tested; the interface is not yet
+> translated in full, and the screenshots are still missing.
 
 ## What it watches
 
@@ -62,6 +63,19 @@ Unit tests run anywhere. Tests tagged `integration` start a PostgreSQL container
 Testcontainers and are skipped automatically when no Docker daemon answers, so `./gradlew test` stays
 green on a machine without one.
 
+### Images
+
+Two images are built from this repository and published to the GitLab Container Registry of the
+project, tagged by branch (`vc-core-main`, `vc-dashboard-develop`, …):
+
+| Image | Base | Contains |
+|---|---|---|
+| `vc-core` | `eclipse-temurin:25-jre-alpine` | the backend as a single jar, non-root, health check on 8090 |
+| `vc-dashboard` | `nginx:alpine` | the built interface, SPA fallback, `/api` forwarded to the backend |
+
+PostgreSQL comes from the official image; `deploy/compose.yml` starts all three. Swap the `image` line
+for the commented `build` block in that file to run local changes.
+
 ### Layout
 
 ```
@@ -83,13 +97,36 @@ only come from the environment carry the literal `USE_ENV` in `application.yml`,
 treats that exactly like a missing value — an unconfigured feature switches itself off instead of
 calling an upstream API with the word `USE_ENV` as its token.
 
+**Environment variables** — everything the containers need:
+
+| Variable | Required | Effect |
+|---|---|---|
+| `VC_DATABASE_HOST` / `_PORT` / `_NAME` | yes | where PostgreSQL is; the compose file sets the first two |
+| `VC_DATABASE_USERNAME` / `_PASSWORD` | yes | database credentials |
+| `VC_HTTP_PORT` | no (8081) | the port the dashboard is published on |
+| `VC_IMAGE_TAG` | no (main) | which branch's images the compose file pulls |
+| `VC_GITHUB_TOKEN` | no | raises the GitHub rate limit from 60 to 5.000 requests/hour |
+| `VC_TELEGRAM_BOT_TOKEN` / `VC_TELEGRAM_CHAT_ID` | no | without them the daily summary is not sent |
+| `VC_TOLGEE_URL` / `_PROJECT_ID` / `_API_KEY` | no | build time only, to re-export the translations |
+
+**Application settings** — `application.yml`, overridable per environment:
+
 | Setting | Default | Effect |
 |---|---|---|
+| `vc.i18n.default-lang` | en | the language of the interface and of the daily message |
+| `vc.scheduler.enabled` | true | switches every background job off in one place |
+| `vc.scheduler.tick-interval` | 15m | how often the scheduler picks up **one** due component |
 | `vc.check.default-interval` | 48h | how often a component is checked |
 | `vc.check.min-interval` | 48h | hard lower bound, manual checks included |
+| `vc.check.jitter` | 2h | spreads the checks instead of running them in a nightly batch |
+| `vc.check.backoff` | 1h, 4h, 12h | how long a failing source is left alone, per consecutive failure |
 | `vc.check.error-grace-days` | 3 | how long a failing check is tolerated before it becomes a task |
+| `vc.eol.check-interval` | 7d | how often end-of-life dates are refreshed |
 | `vc.eol.warn-months` / `escalate-months` | 6 / 3 | end-of-life thresholds |
 | `vc.notification.daily-time` | 08:00 | when the daily summary is sent |
+
+The two ports are fixed inside the images: 8080 serves the API, 8090 serves the actuator and stays
+inside the compose network, which is what the container health check uses.
 
 ### Using a package mirror
 

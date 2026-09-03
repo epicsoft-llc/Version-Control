@@ -11,6 +11,7 @@ import {EnvironmentDto} from '../../repositories/dto/environment.dto';
 import {EolStatusDto} from '../../repositories/dto/eol-status.dto';
 import {UpdateCheckDto} from '../../repositories/dto/update-check.dto';
 import {UpgradeProposalDto} from '../../repositories/dto/upgrade.dto';
+import {DependencyCheckDto} from '../../repositories/dto/dependency.dto';
 import {VersionChangeDto} from '../../repositories/dto/version-change.dto';
 import {ComponentRepo} from '../../repositories/api/component.repo';
 import {ComponentEnvironmentRepo} from '../../repositories/api/component-environment.repo';
@@ -64,6 +65,10 @@ export class ComponentDetailComponent implements OnDestroy {
   protected check?: UpdateCheckDto;
   protected eol?: EolStatusDto;
   protected proposals: UpgradeProposalDto[] = [];
+  /** What this component needs. */
+  protected requires: DependencyCheckDto[] = [];
+  /** What needs this component — the direction that blocks an update. */
+  protected requiredBy: DependencyCheckDto[] = [];
   protected checking = false;
   protected checkingEol = false;
   protected loading = true;
@@ -85,6 +90,11 @@ export class ComponentDetailComponent implements OnDestroy {
 
   public ngOnDestroy(): void {
     unsubscribe(this.subs);
+  }
+
+  /** The environment of a check, by id — the entries are per environment. */
+  protected checkEnvironmentName(check: DependencyCheckDto): string {
+    return this.environmentName(check.environmentId);
   }
 
   protected environmentName(environmentId: string): string {
@@ -190,7 +200,9 @@ export class ComponentDetailComponent implements OnDestroy {
       // the whole history down with it.
       checks: this.updateCheckRepo.findAllByComponent(component.id).pipe(catchError(() => of([]))),
       eol: this.eolStatusRepo.findAllByComponent(component.id).pipe(catchError(() => of([]))),
-      proposals: this.componentRepo.getProposals(component.id).pipe(catchError(() => of([])))
+      proposals: this.componentRepo.getProposals(component.id).pipe(catchError(() => of([]))),
+      requires: this.componentRepo.getDependencies(component.id, false).pipe(catchError(() => of([]))),
+      requiredBy: this.componentRepo.getDependencies(component.id, true).pipe(catchError(() => of([])))
     }).subscribe({
       next: (loaded) => {
         // Never checked is an empty list, not an error: it is the state every
@@ -198,6 +210,8 @@ export class ComponentDetailComponent implements OnDestroy {
         this.check = loaded.checks.at(0);
         this.eol = loaded.eol.at(0);
         this.proposals = loaded.proposals;
+        this.requires = loaded.requires;
+        this.requiredBy = loaded.requiredBy;
         this.rows = loaded.environments.map((environment) => new EnvironmentRow({
           environment: environment,
           cell: loaded.cells.find((cell) => cell.environmentId === environment.id)
@@ -220,6 +234,8 @@ export class ComponentDetailComponent implements OnDestroy {
     this.check = undefined;
     this.eol = undefined;
     this.proposals = [];
+    this.requires = [];
+    this.requiredBy = [];
     this.loading = false;
     this.showError(error);
   }

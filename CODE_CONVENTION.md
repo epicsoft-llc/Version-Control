@@ -160,6 +160,17 @@ rollback path or a backup reference routinely holds host names and snapshot ids,
 by more people, and kept in more places, than the table it came from. Payloads that are nothing but
 identifiers and enums may be logged whole.
 
+### Outbound calls
+
+A call to a foreign server never happens inside a transaction. The entry point splits into read, call
+and write — `collect()`, send, `remember(draft)` — so no database connection waits on a server nobody
+here controls, and so nothing is written down as done before it actually was.
+
+Where a secret is part of an address, **nothing from the client's exception is passed on or logged** —
+not the message, not the cause. An HTTP client puts the request URI into both, and a token in the URI is
+then a token in the log, and from there in every backup of it. Logged is the exception class, thrown is
+a sentence of our own.
+
 ### Migrations
 
 `core/src/main/resources/db/migration/V{version}__{snake_case}.sql`.

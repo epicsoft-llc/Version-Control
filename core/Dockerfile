@@ -1,7 +1,7 @@
-# https://hub.docker.com/r/epicsoft/openjdk — Alpine based, so busybox provides
-# the wget the container health check needs.
-ARG IMAGE_VERSION=jre25-latest
-FROM epicsoft/openjdk:$IMAGE_VERSION
+# The Alpine variant on purpose: busybox provides the wget the container health
+# check needs, and the Ubuntu based image carries neither wget nor curl.
+ARG IMAGE_VERSION=25-jre-alpine
+FROM eclipse-temurin:$IMAGE_VERSION
 
 ARG APP_VERSION="development"
 ARG BUILD_DATE="development"

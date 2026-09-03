@@ -48,6 +48,7 @@ public class UpgradeProposalFacade {
   private final UpgradePathCalculator upgradePathCalculator;
   private final UpgradeStopMapper upgradeStopMapper;
   private final AllowedCandidates allowedCandidates;
+  private final DependencyFacade dependencyFacade;
 
   @Nonnull
   @Transactional(readOnly = true, rollbackFor = Throwable.class)
@@ -55,6 +56,9 @@ public class UpgradeProposalFacade {
     final ComponentEntity component = this.componentService.getById(componentId);
     final Optional<UpdateCheckEntity> check = this.updateCheckService.findByComponent(componentId);
     final List<UpgradeStopEntity> stops = this.upgradeStopService.findAllByComponent(componentId);
+    // Read once for the whole project rather than per environment: the forward
+    // check asks the same handful of rows for every one of them.
+    final DependencyFacade.DependencyIndex index = this.dependencyFacade.index(component.getProjectId());
 
     return this.componentEnvironmentService.findAllByComponent(componentId).stream()
                .filter(ComponentEnvironmentEntity::isActive)
@@ -62,7 +66,7 @@ public class UpgradeProposalFacade {
                // The candidates go through the rule, per environment: the stored
                // list is what the source offered, and proposing straight from it
                // would name variants and prereleases the check itself rejected.
-               .map(cell -> this.toProposal(component, cell,
+               .map(cell -> this.toProposal(index, component, cell,
                                             check.map(entity -> this.allowedCandidates
                                                           .of(component, entity, cell.getCurrentVersion()))
                                                  .orElse(List.of()),
@@ -71,7 +75,8 @@ public class UpgradeProposalFacade {
   }
 
   @Nonnull
-  private UpgradeProposalDto toProposal(@Nonnull final ComponentEntity component,
+  private UpgradeProposalDto toProposal(@Nonnull final DependencyFacade.DependencyIndex index,
+                                        @Nonnull final ComponentEntity component,
                                         @Nonnull final ComponentEnvironmentEntity cell,
                                         @Nonnull final List<String> candidates,
                                         @Nonnull final List<UpgradeStopEntity> stops) {
@@ -88,6 +93,12 @@ public class UpgradeProposalFacade {
     proposal.setUpgradeDocUrl(component.getUpgradeDocUrl());
     proposal.setNeedsMaintenanceWindow(component.isNeedsMaintenanceWindow());
     proposal.setStops(this.stopsBetween(stops, cell.getCurrentVersion(), target, component));
+    // Forwards: would this target break something that needs this component? If
+    // so it is reported as blocked rather than available, and the entries name
+    // what blocks it and which range it violates. Answering that question is
+    // where this beats a table.
+    proposal.setBlockedBy(this.dependencyFacade.blockers(index, component.getId(), cell.getEnvironmentId(),
+                                                        target.target()));
     return proposal;
   }
 

@@ -163,6 +163,20 @@
                 }
               </td>
               <td class="small text-secondary">
+                @if (proposal.blockedBy.length > 0) {
+                  <div class="text-danger-emphasis">
+                    {{ 'proposal.blockedBy' | translate }}:
+                    @for (blocker of proposal.blockedBy; track $index) {
+                      <span class="ms-1">{{ blocker.componentName }} <code>{{ blocker.versionRange }}</code>
+                        <span class="badge ms-1"
+                              [class.text-bg-danger]="blocker.state === 'VIOLATED'"
+                              [class.text-bg-secondary]="blocker.state === 'UNKNOWN'">
+                          {{ 'constraintState.' + blocker.state | translate }}
+                        </span>
+                      </span>
+                    }
+                  </div>
+                }
                 @if (proposal.beyond) {
                   {{ proposal.beyond }}
                   <div>{{ 'proposal.beyondHint' | translate }}</div>
@@ -195,6 +209,60 @@
                 </td>
               </tr>
             }
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+
+  @if (requires.length > 0 || requiredBy.length > 0) {
+    <section class="mb-4">
+      <h2 class="h6 text-uppercase text-secondary">{{ 'dependency.section' | translate }}</h2>
+      <table class="table table-sm align-middle">
+        <thead>
+        <tr>
+          <th scope="col">{{ 'dependency.column.direction' | translate }}</th>
+          <th scope="col">{{ 'component.column.environment' | translate }}</th>
+          <th scope="col">{{ 'dependency.column.requirement' | translate }}</th>
+          <th scope="col">{{ 'component.column.version' | translate }}</th>
+          <th scope="col">{{ 'dependency.column.state' | translate }}</th>
+        </tr>
+        </thead>
+        <tbody>
+          @for (check of requires; track $index) {
+            <tr>
+              <td class="text-secondary small">{{ 'dependency.requires' | translate }}</td>
+              <td>{{ checkEnvironmentName(check) }}</td>
+              <td>{{ check.dependsOnName }} <code>{{ check.versionRange }}</code></td>
+              <td>{{ check.actualVersion || dash }}</td>
+              <td>
+                <span class="badge"
+                      [class.text-bg-success]="check.state === 'SATISFIED'"
+                      [class.text-bg-danger]="check.state === 'VIOLATED'"
+                      [class.text-bg-secondary]="check.state === 'UNKNOWN'">
+                  {{ 'constraintState.' + check.state | translate }}
+                </span>
+                @if (check.note) {
+                  <div class="text-secondary small">{{ check.note }}</div>
+                }
+              </td>
+            </tr>
+          }
+          @for (check of requiredBy; track $index) {
+            <tr>
+              <td class="text-secondary small">{{ 'dependency.requiredBy' | translate }}</td>
+              <td>{{ checkEnvironmentName(check) }}</td>
+              <td>{{ check.componentName }} <code>{{ check.versionRange }}</code></td>
+              <td>{{ check.actualVersion || dash }}</td>
+              <td>
+                <span class="badge"
+                      [class.text-bg-success]="check.state === 'SATISFIED'"
+                      [class.text-bg-danger]="check.state === 'VIOLATED'"
+                      [class.text-bg-secondary]="check.state === 'UNKNOWN'">
+                  {{ 'constraintState.' + check.state | translate }}
+                </span>
+              </td>
+            </tr>
           }
         </tbody>
       </table>

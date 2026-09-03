@@ -1,6 +1,7 @@
 package one.epicsoft.vc.facade;
 
 import one.epicsoft.vc.AbstractIntegrationTest;
+import one.epicsoft.vc.dto.ComponentDependencyRequest;
 import one.epicsoft.vc.dto.ComponentDto;
 import one.epicsoft.vc.dto.ComponentEnvironmentRequest;
 import one.epicsoft.vc.dto.ComponentRequest;
@@ -380,6 +381,50 @@ class TaskListFacadeIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void filesABlockedUpdateAsBlockedRatherThanAsSomethingToDo() {
+    final UUID projectId = this.project();
+    // Major steps allowed, so 18.0 is actually proposed — and then blocked.
+    final ComponentRequest databaseRequest = this.componentRequest(projectId, "PostgreSQL");
+    databaseRequest.setMaxStep(MaxStep.MAJOR);
+    final ComponentDto database = this.componentFacade.create(databaseRequest);
+    final ComponentDto app = this.componentFacade.create(this.componentRequest(projectId, "Zitadel"));
+    final EnvironmentDto production = this.environment(projectId, "Production " + UUID.randomUUID(), true);
+    this.cell(database.getId(), production.getId(), "16.4");
+    this.cell(app.getId(), production.getId(), "3.1.0");
+    this.dependsOn(app, database, ">=14 <18");
+    this.recordCheckWithCandidates(database, "18.0", List.of("16.4", "18.0"));
+
+    final TaskListDto list = this.taskListFacade.getByProject(projectId);
+
+    // The start page must not ask for an upgrade the detail page says is
+    // impossible; and the entry names what stands in the way.
+    assertTrue(this.sections(list).stream()
+                   .noneMatch(section -> TaskSection.UPDATE_OPEN.equals(section.getSection())));
+    final TaskSectionDto blocked = this.section(list, TaskSection.BLOCKED);
+    assertEquals(1, blocked.getEntries().size());
+    // The blocker travels as data, not as an English sentence: what it reads
+    // like is the interface's business, in the reader's language.
+    assertEquals("Zitadel", blocked.getEntries().getFirst().getConstraints().getFirst().getComponentName());
+    assertEquals(">=14 <18", blocked.getEntries().getFirst().getConstraints().getFirst().getVersionRange());
+  }
+
+  @Test
+  void leavesAPrerequisiteThatIsNotRecordedHereOffTheList() {
+    final UUID projectId = this.project();
+    final ComponentDto database = this.componentFacade.create(this.componentRequest(projectId, "PostgreSQL"));
+    final ComponentDto app = this.componentFacade.create(this.componentRequest(projectId, "Zitadel"));
+    final EnvironmentDto production = this.environment(projectId, "Production " + UUID.randomUUID(), true);
+    // The dependent runs, the prerequisite was never recorded here.
+    this.cell(app.getId(), production.getId(), "3.1.0");
+    this.dependsOn(app, database, ">=14 <18");
+
+    // A gap in the inventory, which the matrix already shows as one. Repeating
+    // it here would fill the list with entries nobody can act on.
+    assertTrue(this.sections(this.taskListFacade.getByProject(projectId)).stream()
+                   .noneMatch(section -> TaskSection.DEPENDENCY_VIOLATED.equals(section.getSection())));
+  }
+
+  @Test
   void refusesToSetBlockedByHandAndAPostponementWithoutADate() {
     final UUID projectId = this.project();
     final ComponentDto component = this.componentWithVersion(projectId, "17.2");
@@ -407,6 +452,17 @@ class TaskListFacadeIntegrationTest extends AbstractIntegrationTest {
     final var decision = this.updateDecisionService.findByComponent(componentId).orElseThrow();
     decision.setSnoozeUntil(Instant.now().minus(1, ChronoUnit.DAYS));
     this.updateDecisionService.save(decision);
+  }
+
+  private void dependsOn(final ComponentDto component, final ComponentDto dependsOn, final String range) {
+    final ComponentDependencyRequest dependency = new ComponentDependencyRequest();
+    dependency.setDependsOnId(dependsOn.getId());
+    dependency.setVersionRange(range);
+
+    final ComponentRequest request = this.componentRequest(component.getProjectId(), component.getName());
+    request.setMaxStep(component.getMaxStep());
+    request.setDependencies(List.of(dependency));
+    this.componentFacade.update(component.getId(), request);
   }
 
   private void decide(final UUID componentId, final DecisionState state, final Instant snoozeUntil) {

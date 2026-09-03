@@ -50,6 +50,21 @@
                 }
               </td>
               <td class="small text-secondary">
+                @for (constraint of entry.constraints; track $index) {
+                  <div>
+                    {{ constraint.componentName }}
+                    @if (constraint.actualVersion) {
+                      {{ constraint.actualVersion }}
+                    }
+                    {{ 'dependency.needs' | translate }} {{ constraint.dependsOnName }}
+                    <code>{{ constraint.versionRange }}</code>
+                    <span class="badge ms-1"
+                          [class.text-bg-danger]="constraint.state === 'VIOLATED'"
+                          [class.text-bg-secondary]="constraint.state === 'UNKNOWN'">
+                      {{ 'constraintState.' + constraint.state | translate }}
+                    </span>
+                  </div>
+                }
                 {{ entry.detail }}
                 @if (entry.since) {
                   <div>{{ 'tasks.since' | translate }}: {{ entry.since | date: 'mediumDate' }}</div>

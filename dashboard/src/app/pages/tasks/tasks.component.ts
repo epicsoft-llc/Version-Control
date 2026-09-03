@@ -81,9 +81,14 @@ export class TasksComponent implements OnInit, OnDestroy {
     this.selection.next(projectId);
   }
 
-  /** Only sections about an available update can be answered with a decision. */
+  /**
+   * Sections about an available update can be answered with a decision —
+   * including a blocked one. Somebody may well decide to skip an update that is
+   * blocked, and without the button a blocked entry could be neither done nor
+   * answered, only silently lived with.
+   */
   protected decidable(section: TaskSection): boolean {
-    return section === 'UPDATE_OPEN' || section === 'SNOOZE_EXPIRED';
+    return section === 'UPDATE_OPEN' || section === 'SNOOZE_EXPIRED' || section === 'BLOCKED';
   }
 
   protected openDecision(entry: TaskEntryDto): void {

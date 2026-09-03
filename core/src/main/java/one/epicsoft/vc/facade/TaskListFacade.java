@@ -6,10 +6,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import one.epicsoft.vc.config.CheckProperties;
 import one.epicsoft.vc.config.EolProperties;
+import one.epicsoft.vc.dto.DependencyCheckDto;
 import one.epicsoft.vc.dto.TaskEntryDto;
 import one.epicsoft.vc.dto.TaskListDto;
 import one.epicsoft.vc.dto.TaskSectionDto;
 import one.epicsoft.vc.enums.CheckState;
+import one.epicsoft.vc.enums.ConstraintState;
 import one.epicsoft.vc.enums.DecisionState;
 import one.epicsoft.vc.enums.TaskSection;
 import one.epicsoft.vc.jpa.entity.ComponentEntity;
@@ -77,6 +79,7 @@ public class TaskListFacade {
   private final EolProperties eolProperties;
   private final UpgradePathCalculator upgradePathCalculator;
   private final AllowedCandidates allowedCandidates;
+  private final DependencyFacade dependencyFacade;
 
   @Nonnull
   @Transactional(readOnly = true, rollbackFor = Throwable.class)
@@ -95,6 +98,20 @@ public class TaskListFacade {
     final Map<UUID, EolStatusEntity> eolStatuses =
         this.eolStatusService.findAllByProject(projectId).stream()
             .collect(Collectors.toMap(EolStatusEntity::getComponentId, Function.identity()));
+    // Backwards: what is deployed right now, per environment. A violation here
+    // means something is already running outside what its vendor supports.
+    final Map<UUID, List<DependencyCheckDto>> violations =
+        this.dependencyFacade.checkProject(projectId).stream()
+            .filter(check -> ConstraintState.SATISFIED != check.getState())
+            // A prerequisite that is not recorded in this environment at all is a
+            // gap in the inventory, and the matrix already shows it as one.
+            // Repeating it here would fill the list with entries nobody can act
+            // on, and a list like that stops being read.
+            .filter(check -> nonBlank(check.getActualVersion()))
+            .collect(Collectors.groupingBy(DependencyCheckDto::getComponentId));
+    // Read once for the whole project: the forward check is asked per component
+    // and environment, and a query per question would be a hundred of them.
+    final DependencyFacade.DependencyIndex index = this.dependencyFacade.index(projectId);
     final Map<UUID, List<ComponentEnvironmentEntity>> cells =
         this.componentEnvironmentService.findAllByProject(projectId).stream()
             .collect(Collectors.groupingBy(ComponentEnvironmentEntity::getComponentId));
@@ -106,7 +123,8 @@ public class TaskListFacade {
       final List<ComponentEnvironmentEntity> componentCells = cells.getOrDefault(component.getId(), List.of());
 
       this.addEolTask(entries, component, eolStatuses.get(component.getId()));
-      this.addUpdateTask(entries, component, check, decision, componentCells);
+      this.addViolatedDependencies(entries, component, violations);
+      this.addUpdateTask(entries, component, check, decision, componentCells, index);
       this.addCheckError(entries, component, check);
       addMovingTags(entries, component, componentCells);
     }
@@ -155,6 +173,29 @@ public class TaskListFacade {
   }
 
   /**
+   * A dependency that is not met by what is deployed, or cannot be evaluated.
+   *
+   * <p>Unknown belongs here as much as violated: a version nothing can read is
+   * the case nobody checked by hand either, and leaving it out would report
+   * "everything fits" for the one combination nothing is known about.
+   */
+  private void addViolatedDependencies(@Nonnull final Map<TaskSection, List<TaskEntryDto>> entries,
+                                       @Nonnull final ComponentEntity component,
+                                       @Nonnull final Map<UUID, List<DependencyCheckDto>> violations) {
+    for (final DependencyCheckDto violation : violations.getOrDefault(component.getId(), List.of())) {
+      // With the environment named: the same dependency yields one result per
+      // environment, and without it the list carries rows nobody can tell apart.
+      // The version stays empty on purpose — the one in the check belongs to the
+      // prerequisite, and every other section puts the row's own version there.
+      final TaskEntryDto entry = entry(component, violation.getEnvironmentName(), null, null);
+      // The check itself travels with the entry; what it reads like is the
+      // interface's business, in the reader's language.
+      entry.setConstraints(List.of(violation));
+      add(entries, TaskSection.DEPENDENCY_VIOLATED, entry);
+    }
+  }
+
+  /**
    * An available update, filed by what was decided about it: nothing yet, a
    * postponement that has run out, or a block that came from the dependency
    * check. A planned or skipped update is a closed question and stays off the
@@ -164,7 +205,8 @@ public class TaskListFacade {
                              @Nonnull final ComponentEntity component,
                              @Nullable final UpdateCheckEntity check,
                              @Nullable final UpdateDecisionEntity decision,
-                             @Nonnull final List<ComponentEnvironmentEntity> cells) {
+                             @Nonnull final List<ComponentEnvironmentEntity> cells,
+                             @Nonnull final DependencyFacade.DependencyIndex index) {
     // Not tied to a successful check: a failing one keeps the version the last
     // good one found, and a component that is two versions behind must not drop
     // off the list because the source happened to answer with a 503.
@@ -206,16 +248,26 @@ public class TaskListFacade {
              // off: shown on the component, never demanded here.
              return;
            }
+           // Forwards: would this target break something that needs the
+           // component? Then it is blocked, not available — the start page must
+           // not ask for an upgrade that the detail page says is impossible.
+           final List<DependencyCheckDto> blockers =
+               this.dependencyFacade.blockers(index, component.getId(), cell.getEnvironmentId(), target.target());
+
            final TaskEntryDto entry = entry(component, cell.getEnvironment().getName(), cell.getCurrentVersion(),
                                             target.target());
+           // The note stays the note, and the blockers travel as data beside it:
+           // a postponement whose note explains why must not lose that note the
+           // moment something blocks it.
            entry.setDetail(nonNull(decision) ? decision.getNote() : null);
+           entry.setConstraints(blockers);
            // The postponement date where there is one, otherwise how long the
            // update has been available. Blank exactly where there is most
            // history would be the wrong way round.
            entry.setSince(nonNull(decision) && nonNull(decision.getSnoozeUntil())
                               ? decision.getSnoozeUntil()
                               : check.getLastSuccessfulCheckAt());
-           add(entries, section, entry);
+           add(entries, blockers.isEmpty() ? section : TaskSection.BLOCKED, entry);
          });
   }
 
@@ -285,6 +337,7 @@ public class TaskListFacade {
     entry.setEnvironmentName(environmentName);
     entry.setCurrentVersion(currentVersion);
     entry.setLatestVersion(latestVersion);
+    entry.setConstraints(List.of());
     return entry;
   }
 

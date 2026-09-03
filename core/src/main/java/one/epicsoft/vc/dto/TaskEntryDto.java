@@ -6,6 +6,7 @@ import jakarta.annotation.Nullable;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /** One thing to do, with what it takes to judge it without opening anything. */
@@ -34,10 +35,24 @@ public class TaskEntryDto {
   @JsonProperty("latestVersion")
   private String latestVersion;
 
-  /** Free text the section decides: an error message, a blocker, a date. */
+  /**
+   * Free text of the reader's own making — a note somebody wrote, or the
+   * technical message of a failed check. Never a sentence composed here: a
+   * sentence built in the backend cannot be translated, and the rule against
+   * hardcoded visible text covers backend messages as much as templates.
+   */
   @Nullable
   @JsonProperty("detail")
   private String detail;
+
+  /**
+   * The constraints this entry is about — violated ones for a dependency, the
+   * blocking ones for an update that cannot be done. The interface composes the
+   * sentence from them, in the reader's language.
+   */
+  @Nonnull
+  @JsonProperty("constraints")
+  private List<DependencyCheckDto> constraints;
 
   @Nullable
   @JsonProperty("since")

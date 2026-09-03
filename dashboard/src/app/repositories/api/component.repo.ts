@@ -4,6 +4,7 @@ import {Observable} from 'rxjs';
 import {UrlBuilder} from '../item/url.item';
 import {ComponentDto, ComponentRequest} from '../dto/component.dto';
 import {UpgradeProposalDto} from '../dto/upgrade.dto';
+import {DependencyCheckDto} from '../dto/dependency.dto';
 
 @Injectable({providedIn: 'root'})
 export class ComponentRepo {
@@ -13,6 +14,7 @@ export class ComponentRepo {
   private readonly pathAll = '/v1/components';
   private readonly pathOne = '/v1/components/{id}';
   private readonly pathProposals = '/v1/components/{id}/proposals';
+  private readonly pathDependencies = '/v1/components/{id}/dependencies';
 
   public findAllByProject(projectId: string): Observable<ComponentDto[]> {
     return this.http.get<ComponentDto[]>(UrlBuilder.builder()
@@ -30,6 +32,18 @@ export class ComponentRepo {
     return this.http.get<UpgradeProposalDto[]>(UrlBuilder.builder()
                                                          .addPath(this.pathProposals)
                                                          .addParam('id', id)
+                                                         .build().getUrl());
+  }
+
+  /**
+   * Both directions: what this component needs, and what needs it. The second is
+   * what says whether an update would break something.
+   */
+  public getDependencies(id: string, dependents: boolean): Observable<DependencyCheckDto[]> {
+    return this.http.get<DependencyCheckDto[]>(UrlBuilder.builder()
+                                                         .addPath(this.pathDependencies)
+                                                         .addParam('id', id)
+                                                         .addQuery('dependents', dependents)
                                                          .build().getUrl());
   }
 

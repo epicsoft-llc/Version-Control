@@ -260,3 +260,41 @@ CREATE TABLE eol_status
 );
 CREATE UNIQUE INDEX UQ_eol_status_component ON eol_status (component_id);
 CREATE INDEX IX_eol_status_next_check_due ON eol_status (next_check_due);
+
+-- One component needs another at a certain version. Evaluated per environment,
+-- because production and staging can hold two different answers to the same
+-- question.
+CREATE TABLE component_dependency
+(
+    id             UUID         NOT NULL,
+    component_id   UUID         NOT NULL,
+    depends_on_id  UUID         NOT NULL,
+    -- A version range in the npm style, for example ">=14 <18".
+    version_range  VARCHAR(200) NOT NULL,
+    note           TEXT,
+    created        TIMESTAMP(6) NOT NULL,
+    updated        TIMESTAMP(6),
+    CONSTRAINT PK_component_dependency PRIMARY KEY (id),
+    CONSTRAINT FK_component_dependency_component
+        FOREIGN KEY (component_id) REFERENCES component (id) ON DELETE CASCADE,
+    CONSTRAINT FK_component_dependency_depends_on
+        FOREIGN KEY (depends_on_id) REFERENCES component (id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX UQ_component_dependency_pair ON component_dependency (component_id, depends_on_id);
+CREATE INDEX IX_component_dependency_depends_on ON component_dependency (depends_on_id);
+
+-- What the daily notification has already reported. One row per thing that was
+-- sent; a row that is gone from the current state is removed again, so a problem
+-- that comes back is reported once more rather than staying silent for good.
+CREATE TABLE notification_entry
+(
+    id           UUID         NOT NULL,
+    entry_key    VARCHAR(500) NOT NULL,
+    project_id   UUID         NOT NULL,
+    reported_at  TIMESTAMP(6) NOT NULL,
+    created      TIMESTAMP(6) NOT NULL,
+    updated      TIMESTAMP(6),
+    CONSTRAINT PK_notification_entry PRIMARY KEY (id),
+    CONSTRAINT FK_notification_entry_project FOREIGN KEY (project_id) REFERENCES project (id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX UQ_notification_entry_key ON notification_entry (entry_key);

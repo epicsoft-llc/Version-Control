@@ -6,6 +6,8 @@ import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static one.epicsoft.vc.util.VcUtil.nonBlank;
+
 /**
  * Which tags of a source count as a candidate for one component.
  *
@@ -44,6 +46,14 @@ public final class TagRule {
   private static final Pattern PRERELEASE =
     Pattern.compile("(?i).*[-.](rc|alpha|beta|preview|snapshot|dev|m)\\.?\\d*$");
 
+  /**
+   * Digits, an optional Debian revision, and the usual prerelease markers —
+   * 1.2.3, 6.4.1-15, 2.0.0-rc.1. A variant suffix such as 17-alpine is left out
+   * on purpose: that tag moves.
+   */
+  private static final Pattern PINNED_VERSION =
+    Pattern.compile("^\\d+(\\.\\d+)*(-\\d+)?([-.](rc|alpha|beta|m)\\.?\\d*)?$");
+
   private TagRule() {
     // utility class
   }
@@ -74,9 +84,50 @@ public final class TagRule {
     return pattern.append("$").toString();
   }
 
+  /**
+   * A tag that is not a fixed version number — latest, stable, 17-alpine.
+   *
+   * <p>Such a tag is allowed, but what it points at can change without the
+   * recorded value changing with it. Everything that has to reason about the
+   * version behind a tag has to know that, which is why the definition lives
+   * here rather than once per caller.
+   */
+  public static boolean isMovingTag(@Nullable final String tag) {
+    return nonBlank(tag) && !PINNED_VERSION.matcher(tag.trim()).matches();
+  }
+
   /** True when the tag looks like a preview rather than a release. */
   public static boolean isPrerelease(@Nullable final String tag) {
     return Objects.nonNull(tag) && PRERELEASE.matcher(tag.trim()).matches();
+  }
+
+  /**
+   * The tag reduced to what may be compared with a version range.
+   *
+   * <p>The prefix goes — a {@code v} and a Debian epoch are not part of the
+   * number. The suffix stays only when it marks a preview: {@code 2.0.0-rc.1}
+   * has to keep it, or an rc is read as its own release and answers
+   * {@code >=2.0.0} with yes.
+   *
+   * <p>Every other suffix goes, and that is the part that is easy to get wrong.
+   * A semantic version parser reads {@code 6.4.1-15} and {@code 1.2.3-alpine} as
+   * prereleases, which sort <em>below</em> the release — so a component running
+   * the Debian revision 15 of 6.4.1, or the alpine build of 1.2.3, would fail
+   * {@code >=6.4.1} and {@code >=1.2.3}. Both are the release, packaged; the
+   * revision and the variant say nothing about which upstream version runs.
+   *
+   * @return null when the tag carries no version core at all
+   */
+  @Nullable
+  public static String versionForComparison(@Nullable final String tag) {
+    if (!nonBlank(tag)) {
+      return null;
+    }
+    final Matcher matcher = TAG.matcher(tag.trim());
+    if (!matcher.matches()) {
+      return null;
+    }
+    return isPrerelease(tag) ? matcher.group(2) + matcher.group(3) : matcher.group(2);
   }
 
   /**
@@ -95,18 +146,18 @@ public final class TagRule {
     return matcher.matches() ? matcher.group(2).split("\\.")[0] : null;
   }
 
-  /**
-   * Turns the part behind the version core into pattern text: digits become a
-   * number again, everything else has to match literally. A revision such as the
-   * {@code -15} of {@code 6.4.1-15} counts up, the {@code -alpine} of
-   * {@code 17.2-alpine} does not.
-   */
   /** The v belongs to the tag and stays in the rule; the epoch does not. */
   @Nonnull
   private static String prefixLiteral(@Nullable final String prefix) {
     return Objects.isNull(prefix) || prefix.endsWith(":") ? "" : prefix;
   }
 
+  /**
+   * Turns the part behind the version core into pattern text: digits become a
+   * number again, everything else has to match literally. A revision such as the
+   * {@code -15} of {@code 6.4.1-15} counts up, the {@code -alpine} of
+   * {@code 17.2-alpine} does not.
+   */
   @Nonnull
   private static String suffixPattern(@Nonnull final String suffix) {
     if (suffix.isEmpty()) {

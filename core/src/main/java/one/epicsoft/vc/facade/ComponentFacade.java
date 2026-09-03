@@ -7,18 +7,23 @@ import lombok.extern.slf4j.Slf4j;
 import one.epicsoft.vc.dto.ComponentDto;
 import one.epicsoft.vc.dto.ComponentPackageRequest;
 import one.epicsoft.vc.dto.ComponentRequest;
+import one.epicsoft.vc.dto.ComponentDependencyRequest;
 import one.epicsoft.vc.dto.UpgradeStopRequest;
 import one.epicsoft.vc.exception.AppConflictException;
 import one.epicsoft.vc.exception.AppValidationException;
 import one.epicsoft.vc.jpa.entity.ComponentEntity;
 import one.epicsoft.vc.jpa.entity.ComponentPackageEntity;
+import one.epicsoft.vc.jpa.entity.ComponentDependencyEntity;
 import one.epicsoft.vc.jpa.entity.UpgradeStopEntity;
 import one.epicsoft.vc.jpa.entity.ProjectEntity;
 import one.epicsoft.vc.mapper.ComponentMapper;
+import one.epicsoft.vc.mapper.ComponentDependencyMapper;
 import one.epicsoft.vc.mapper.UpgradeStopMapper;
 import one.epicsoft.vc.service.ComponentEnvironmentService;
 import one.epicsoft.vc.service.ComponentService;
+import one.epicsoft.vc.service.ComponentDependencyService;
 import one.epicsoft.vc.service.UpgradeStopService;
+import one.epicsoft.vc.version.ConstraintEvaluator;
 import one.epicsoft.vc.service.ProjectService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,8 +37,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.isNull;
-import static one.epicsoft.vc.util.VcUtil.nonBlank;
 import static java.util.Objects.nonNull;
+import static one.epicsoft.vc.util.VcUtil.nonBlank;
 import static one.epicsoft.vc.util.VcUtil.nonEquals;
 
 @Slf4j
@@ -47,6 +52,9 @@ public class ComponentFacade {
   private final ComponentMapper componentMapper;
   private final UpgradeStopService upgradeStopService;
   private final UpgradeStopMapper upgradeStopMapper;
+  private final ComponentDependencyService componentDependencyService;
+  private final ComponentDependencyMapper componentDependencyMapper;
+  private final ConstraintEvaluator constraintEvaluator;
 
   @Nonnull
   @Transactional(readOnly = true, rollbackFor = Throwable.class)
@@ -73,6 +81,7 @@ public class ComponentFacade {
     entity.setProject(project);
     final ComponentEntity saved = this.componentService.save(entity);
     this.applyUpgradeStops(saved, request.getUpgradeStops());
+    this.applyDependencies(saved, request.getDependencies());
     this.applyPackages(saved, request.getPackages());
     return this.toDtos(List.of(saved)).getFirst();
   }
@@ -93,6 +102,7 @@ public class ComponentFacade {
     normalise(entity);
     final ComponentEntity saved = this.componentService.save(entity);
     this.applyUpgradeStops(saved, request.getUpgradeStops());
+    this.applyDependencies(saved, request.getDependencies());
     this.applyPackages(saved, request.getPackages());
     return this.toDtos(List.of(saved)).getFirst();
   }
@@ -101,6 +111,10 @@ public class ComponentFacade {
   @Transactional(rollbackFor = Throwable.class)
   public void delete(@Nonnull final UUID id) {
     final ComponentEntity component = this.componentService.getById(id);
+    // What this component declared goes with it — it is not history. What other
+    // components need from it stays theirs; every query hides those rows while
+    // this one is deleted.
+    this.componentDependencyService.deleteAllOf(id);
     this.componentEnvironmentService.findAllByComponent(id).forEach(this.componentEnvironmentService::delete);
     this.componentService.delete(component);
   }
@@ -135,9 +149,44 @@ public class ComponentFacade {
   }
 
   /**
-   * Null leaves the stored stops alone, a list replaces them — same shape as the
-   * package list, because they are edited in the same form.
+   * Null leaves the stored dependencies alone, a list replaces them.
+   *
+   * <p>A component cannot depend on itself, and a prerequisite has to live in
+   * the same project: a dependency across projects would be evaluated against
+   * environments that do not exist on the other side.
    */
+  private void applyDependencies(@Nonnull final ComponentEntity component,
+                                 @Nullable final List<ComponentDependencyRequest> requested) {
+    if (isNull(requested)) {
+      return;
+    }
+    final List<ComponentDependencyEntity> dependencies = new ArrayList<>();
+    final Set<UUID> seen = new HashSet<>();
+    for (final ComponentDependencyRequest entry : requested) {
+      if (component.getId().equals(entry.getDependsOnId())) {
+        throw AppValidationException.selfDependency(component.getId());
+      }
+      if (!seen.add(entry.getDependsOnId())) {
+        throw AppValidationException.duplicateDependency(entry.getDependsOnId());
+      }
+      if (!this.constraintEvaluator.isReadable(entry.getVersionRange())) {
+        // Stored unchecked, it would block every upgrade of the prerequisite for
+        // good, with nothing but a detail string to explain why.
+        throw AppValidationException.invalidVersionRange(entry.getVersionRange());
+      }
+      final ComponentEntity dependsOn = this.componentService.getById(entry.getDependsOnId());
+      if (nonEquals(component.getProjectId(), dependsOn.getProjectId())) {
+        throw AppValidationException.dependencyAcrossProjects(component.getId(), dependsOn.getId());
+      }
+      final ComponentDependencyEntity dependency = new ComponentDependencyEntity();
+      dependency.setDependsOn(dependsOn);
+      dependency.setVersionRange(entry.getVersionRange());
+      dependency.setNote(entry.getNote());
+      dependencies.add(dependency);
+    }
+    this.componentDependencyService.replaceDependencies(component, dependencies);
+  }
+
   /**
    * A cleared text field arrives as an empty string, and an empty string is not
    * a product. Left as it is, the end-of-life job would pick this component on
@@ -153,6 +202,10 @@ public class ComponentFacade {
     }
   }
 
+  /**
+   * Null leaves the stored stops alone, a list replaces them — same shape as the
+   * package list, because they are edited in the same form.
+   */
   private void applyUpgradeStops(@Nonnull final ComponentEntity component,
                                  @Nullable final List<UpgradeStopRequest> requested) {
     if (isNull(requested)) {
@@ -199,10 +252,17 @@ public class ComponentFacade {
         this.upgradeStopService.findAllByComponents(entities.stream().map(ComponentEntity::getId).toList()).stream()
             .collect(Collectors.groupingBy(UpgradeStopEntity::getComponentId));
 
+    final Map<UUID, List<ComponentDependencyEntity>> dependencies =
+        this.componentDependencyService.findAllByComponents(entities.stream().map(ComponentEntity::getId).toList())
+            .stream()
+            .collect(Collectors.groupingBy(ComponentDependencyEntity::getComponentId));
+
     return entities.stream().map(entity -> {
       final ComponentDto dto = this.componentMapper.toDto(entity);
       dto.setPackages(this.componentMapper.toPackageDtos(packages.getOrDefault(entity.getId(), List.of())));
       dto.setUpgradeStops(this.upgradeStopMapper.toDtos(stops.getOrDefault(entity.getId(), List.of())));
+      dto.setDependencies(this.componentDependencyMapper.toDtos(
+          dependencies.getOrDefault(entity.getId(), List.of())));
       return dto;
     }).toList();
   }

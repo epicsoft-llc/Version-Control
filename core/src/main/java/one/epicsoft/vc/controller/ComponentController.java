@@ -5,8 +5,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import one.epicsoft.vc.dto.ComponentDto;
 import one.epicsoft.vc.dto.ComponentRequest;
+import one.epicsoft.vc.dto.DependencyCheckDto;
 import one.epicsoft.vc.dto.UpgradeProposalDto;
 import one.epicsoft.vc.facade.ComponentFacade;
+import one.epicsoft.vc.facade.DependencyFacade;
 import one.epicsoft.vc.facade.UpgradeProposalFacade;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -34,6 +36,7 @@ public class ComponentController {
 
   private final ComponentFacade componentFacade;
   private final UpgradeProposalFacade upgradeProposalFacade;
+  private final DependencyFacade dependencyFacade;
 
   @GetMapping(consumes = MediaType.ALL_VALUE)
   public ResponseEntity<List<ComponentDto>> findAllByProject(@RequestParam final UUID projectId) {
@@ -55,6 +58,19 @@ public class ComponentController {
   public ResponseEntity<List<UpgradeProposalDto>> getProposals(@PathVariable final UUID id) {
     log.debug("Incoming GET proposals for component {}", id);
     return ResponseEntity.ok(this.upgradeProposalFacade.getByComponent(id));
+  }
+
+  /**
+   * What this component needs and what needs it, evaluated per environment. Both
+   * directions, because the second is what says whether an update breaks anything.
+   */
+  @GetMapping(path = "/{id}/dependencies", consumes = MediaType.ALL_VALUE)
+  public ResponseEntity<List<DependencyCheckDto>> getDependencies(@PathVariable final UUID id,
+                                                                  @RequestParam(defaultValue = "false")
+                                                                  final boolean dependents) {
+    log.debug("Incoming GET dependencies of component {} (dependents={})", id, dependents);
+    return ResponseEntity.ok(dependents ? this.dependencyFacade.checkDependents(id)
+                                        : this.dependencyFacade.checkComponent(id));
   }
 
   @PostMapping

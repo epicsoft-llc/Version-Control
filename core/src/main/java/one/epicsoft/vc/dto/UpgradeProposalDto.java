@@ -42,6 +42,14 @@ public class UpgradeProposalDto {
   @JsonProperty("beyond")
   private String beyond;
 
+  /**
+   * What stands in the way of the target: the components that need this one at a
+   * range the target would leave. Empty means nothing does.
+   */
+  @Nonnull
+  @JsonProperty("blockedBy")
+  private List<DependencyCheckDto> blockedBy;
+
   /** Versions between here and the target that cannot be skipped. */
   @Nonnull
   @JsonProperty("stops")

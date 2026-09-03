@@ -16,6 +16,7 @@ public interface ComponentMapper {
 
   @Mapping(target = "packages", ignore = true)
   @Mapping(target = "upgradeStops", ignore = true)
+  @Mapping(target = "dependencies", ignore = true)
   ComponentDto toDto(final ComponentEntity entity);
 
   ComponentPackageDto toPackageDto(final ComponentPackageEntity entity);

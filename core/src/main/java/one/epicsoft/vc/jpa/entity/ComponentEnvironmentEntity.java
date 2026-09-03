@@ -15,6 +15,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
+import one.epicsoft.vc.version.TagRule;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
@@ -29,13 +30,6 @@ import static one.epicsoft.vc.util.VcUtil.nonBlank;
 @Entity
 @Table(name = "component_environment")
 public class ComponentEnvironmentEntity extends AbstractDeletableEntity {
-
-  /**
-   * Digits, an optional Debian revision, and the usual prerelease markers -
-   * 1.2.3, 6.4.1-15, 2.0.0-rc.1. A variant suffix such as 17-alpine is not in
-   * here on purpose: that tag moves.
-   */
-  private static final String PINNED_VERSION = "^\\d+(\\.\\d+)*(-\\d+)?([-.](rc|alpha|beta|m)\\.?\\d*)?$";
 
   /**
    * False means "deliberately not present here" — a different statement from an
@@ -108,9 +102,11 @@ public class ComponentEnvironmentEntity extends AbstractDeletableEntity {
   /**
    * A tag that is not a plain version number — latest, stable, 17-alpine. Derived
    * rather than stored: a separate field would drift from the value it describes.
+   * The rule itself lives in {@link TagRule}, because the dependency check has to
+   * ask the same question.
    */
   public boolean isMovingTag() {
-    return nonBlank(this.currentVersion) && !this.currentVersion.matches(PINNED_VERSION);
+    return TagRule.isMovingTag(this.currentVersion);
   }
 
   // #### Custom Getter and Setter

@@ -1,3 +1,5 @@
+import {DependencyCheckDto} from './dependency.dto';
+
 /**
  * The sections of the task list, in the order they are read. Two of them cannot
  * be filled yet: the dependency check and the end-of-life watch are later steps.
@@ -20,8 +22,14 @@ export class TaskEntryDto {
   public environmentName?: string;
   public currentVersion?: string;
   public latestVersion?: string;
-  /** Free text the section decides: an error message, a blocker, a date. */
+  /** Free text of the reader's own making: a note, or a technical error message. */
   public detail?: string;
+  /**
+   * The constraints this entry is about — violated ones for a dependency, the
+   * blocking ones for an update that cannot be done. The sentence is composed
+   * here, in the reader's language, rather than in the backend.
+   */
+  public constraints: DependencyCheckDto[] = [];
   public since?: string;
 
   constructor(init?: Partial<TaskEntryDto>) {

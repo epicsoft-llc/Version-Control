@@ -37,6 +37,43 @@ public class AppValidationException extends AppException {
     return new AppValidationException("Package '%s' is listed twice".formatted(name), "error.duplicatePackage");
   }
 
+  /**
+   * A prerequisite from another project would be evaluated against environments
+   * that do not exist on the other side.
+   */
+  @Nonnull
+  public static AppValidationException dependencyAcrossProjects(@Nonnull final UUID componentId,
+                                                                @Nonnull final UUID dependsOnId) {
+    return new AppValidationException("Component %s and its prerequisite %s belong to different projects"
+                                          .formatted(componentId, dependsOnId),
+                                      "error.dependencyAcrossProjects");
+  }
+
+  /**
+   * A range nothing can read blocks every future update of the prerequisite and
+   * says nothing about why — so it is refused where it is written, not carried
+   * into the task list as a permanent unexplained block.
+   */
+  @Nonnull
+  public static AppValidationException invalidVersionRange(@Nonnull final String range) {
+    return new AppValidationException("Version range %s cannot be read".formatted(range),
+                                      "error.invalidVersionRange");
+  }
+
+  /** A component that depends on itself would block every update of its own. */
+  @Nonnull
+  public static AppValidationException selfDependency(@Nonnull final UUID componentId) {
+    return new AppValidationException("Component %s cannot depend on itself".formatted(componentId),
+                                      "error.selfDependency");
+  }
+
+  /** Two ranges for the same prerequisite would reach the unique index as a 500. */
+  @Nonnull
+  public static AppValidationException duplicateDependency(@Nonnull final UUID dependsOnId) {
+    return new AppValidationException("Component %s is listed twice as a prerequisite".formatted(dependsOnId),
+                                      "error.duplicateDependency");
+  }
+
   /** Two stops on the same version would reach the unique index as a 500. */
   @Nonnull
   public static AppValidationException duplicateUpgradeStop(@Nonnull final String version) {

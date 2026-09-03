@@ -2,7 +2,7 @@ import {Component, inject, OnDestroy, OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {HttpErrorResponse} from '@angular/common/http';
 import {RouterLink} from '@angular/router';
-import {TranslatePipe} from '@ngx-translate/core';
+import {TranslatePipe, TranslateService} from '@ngx-translate/core';
 import {catchError, forkJoin, Observable, of, Subject, Subscription, switchMap, tap} from 'rxjs';
 import {ProjectDto, ProjectRequest} from '../../repositories/dto/project.dto';
 import {EnvironmentDto, EnvironmentRequest} from '../../repositories/dto/environment.dto';
@@ -10,11 +10,24 @@ import {ComponentDto, ComponentPackageRequest, ComponentRequest} from '../../rep
 import {MAX_STEPS, SOURCE_TYPES, VERSION_STRATEGIES} from '../../repositories/dto/enums.dto';
 import {VersionPreviewDto, VersionPreviewRequest} from '../../repositories/dto/update-check.dto';
 import {UpgradeStopRequest} from '../../repositories/dto/upgrade.dto';
+import {ComponentDependencyRequest} from '../../repositories/dto/dependency.dto';
 import {ProjectRepo} from '../../repositories/api/project.repo';
 import {EnvironmentRepo} from '../../repositories/api/environment.repo';
 import {ComponentRepo} from '../../repositories/api/component.repo';
 import {UpdateCheckRepo} from '../../repositories/api/update-check.repo';
 import {isDefined, nonBlank, notDefined, unsubscribe} from '../../libs/utils/vc.utils';
+
+/** One row of the dependency editor: what is needed, in which range, and why. */
+export class DependencyRow {
+
+  public dependsOnId = '';
+  public versionRange = '';
+  public note = '';
+
+  constructor(init?: Partial<DependencyRow>) {
+    Object.assign(this, init);
+  }
+}
 
 /** One row of the stop editor: a version that cannot be skipped, and why. */
 export class StopRow {
@@ -56,6 +69,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
   private readonly environmentRepo: EnvironmentRepo = inject(EnvironmentRepo);
   private readonly componentRepo: ComponentRepo = inject(ComponentRepo);
   private readonly updateCheckRepo: UpdateCheckRepo = inject(UpdateCheckRepo);
+  private readonly translate: TranslateService = inject(TranslateService);
   private readonly subs: Subscription[] = [];
 
   /**
@@ -83,6 +97,8 @@ export class MasterDataComponent implements OnInit, OnDestroy {
   protected componentFormId?: string;
   protected packageRows: PackageRow[] = [];
   protected stopRows: StopRow[] = [];
+  protected dependencyRows: DependencyRow[] = [];
+  protected prerequisites: ComponentDto[] = [];
   protected preview?: VersionPreviewDto;
   protected previewing = false;
 
@@ -222,6 +238,8 @@ export class MasterDataComponent implements OnInit, OnDestroy {
     });
     this.packageRows = [];
     this.stopRows = [];
+    this.dependencyRows = [];
+    this.updatePrerequisites();
   }
 
   protected editComponent(component: ComponentDto): void {
@@ -256,6 +274,12 @@ export class MasterDataComponent implements OnInit, OnDestroy {
       version: entry.version,
       note: entry.note ?? ''
     }));
+    this.dependencyRows = component.dependencies.map((entry) => new DependencyRow({
+      dependsOnId: entry.dependsOnId,
+      versionRange: entry.versionRange,
+      note: entry.note ?? ''
+    }));
+    this.updatePrerequisites();
   }
 
   protected saveComponent(): void {
@@ -281,6 +305,21 @@ export class MasterDataComponent implements OnInit, OnDestroy {
                                .filter((row) => nonBlank(row.version))
                                .map((row) => new UpgradeStopRequest({
                                  version: row.version.trim(),
+                                 note: nonBlank(row.note) ? row.note.trim() : undefined
+                               }));
+    // Half filled rows are refused rather than dropped: a row that disappears on
+    // save looks exactly like one that was stored, and the reader finds out
+    // weeks later that the dependency was never there.
+    if (this.dependencyRows.some((row) => nonBlank(row.dependsOnId) !== nonBlank(row.versionRange))) {
+      this.errorMessage = this.translate.instant('masterData.dependencies.incomplete');
+      return;
+    }
+    // Always sent, so removing the last dependency actually removes it.
+    request.dependencies = this.dependencyRows
+                               .filter((row) => nonBlank(row.dependsOnId) && nonBlank(row.versionRange))
+                               .map((row) => new ComponentDependencyRequest({
+                                 dependsOnId: row.dependsOnId,
+                                 versionRange: row.versionRange.trim(),
                                  note: nonBlank(row.note) ? row.note.trim() : undefined
                                }));
     const call: Observable<ComponentDto> = isDefined(this.componentFormId)
@@ -337,6 +376,24 @@ export class MasterDataComponent implements OnInit, OnDestroy {
     }));
   }
 
+  protected addDependencyRow(): void {
+    this.dependencyRows.push(new DependencyRow());
+  }
+
+  protected removeDependencyRow(index: number): void {
+    this.dependencyRows.splice(index, 1);
+  }
+
+  /**
+   * Everything in the project except the component being edited, worked out when
+   * the form opens rather than on every change detection pass. While a new one is
+   * being created there is nothing to exclude, and the backend takes the
+   * dependencies along with the create — so the editor works there too.
+   */
+  private updatePrerequisites(): void {
+    this.prerequisites = this.components.filter((entry) => entry.id !== this.componentFormId);
+  }
+
   protected addStopRow(): void {
     this.stopRows.push(new StopRow());
   }
@@ -377,6 +434,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
     this.componentFormId = undefined;
     this.packageRows = [];
     this.stopRows = [];
+    this.dependencyRows = [];
     this.preview = undefined;
     this.errorMessage = undefined;
   }

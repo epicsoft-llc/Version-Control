@@ -18,9 +18,10 @@ variables:
   VERSION: ${CI_COMMIT_REF_NAME}
   GRADLE_OPTS: "-Dorg.gradle.console=plain -Dorg.gradle.daemon=false"
   GRADLE_USER_HOME: "${CI_PROJECT_DIR}/.gradle"
-  #### https://hub.docker.com/r/epicsoft/openjdk
-  JDK_IMAGE: epicsoft/openjdk:jdk25-latest
-  JRE_IMAGE_VERSION: jre25-latest
+  #### Official images only — this repository is public and must build for
+  #### anyone, without an account anywhere.
+  JDK_IMAGE: eclipse-temurin:25-jdk
+  JRE_IMAGE_VERSION: 25-jre-alpine
   NODE_IMAGE: node:24-alpine
   BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
 

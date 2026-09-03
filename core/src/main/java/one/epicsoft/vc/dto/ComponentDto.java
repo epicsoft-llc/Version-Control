@@ -104,4 +104,9 @@ public class ComponentDto {
   @Nonnull
   @JsonProperty("upgradeStops")
   private List<UpgradeStopDto> upgradeStops;
+
+  /** What this component needs; the other direction is evaluated, not stored. */
+  @Nonnull
+  @JsonProperty("dependencies")
+  private List<ComponentDependencyDto> dependencies;
 }

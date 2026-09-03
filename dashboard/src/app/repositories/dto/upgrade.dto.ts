@@ -1,3 +1,5 @@
+import {DependencyCheckDto} from './dependency.dto';
+
 /** A version that cannot be skipped on the way up. */
 export class UpgradeStopDto {
 
@@ -29,6 +31,9 @@ export class UpgradeStopRequest {
  * red state nobody can resolve.
  */
 export class UpgradeProposalDto {
+
+  /** What stands in the way of the target; empty means nothing does. */
+  public blockedBy: DependencyCheckDto[] = [];
 
   public environmentId!: string;
   public environmentName!: string;

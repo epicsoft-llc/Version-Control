@@ -1,5 +1,6 @@
 import {MaxStep, SourceType, VersionStrategy} from './enums.dto';
 import {UpgradeStopDto, UpgradeStopRequest} from './upgrade.dto';
+import {ComponentDependencyDto, ComponentDependencyRequest} from './dependency.dto';
 
 /** One package of a component that consists of several. */
 export class ComponentPackageDto {
@@ -40,6 +41,8 @@ export class ComponentDto {
   public packages: ComponentPackageDto[] = [];
   /** Versions that cannot be skipped on the way up. */
   public upgradeStops: UpgradeStopDto[] = [];
+  /** What this component needs; the other direction is evaluated, not stored. */
+  public dependencies: ComponentDependencyDto[] = [];
 
   constructor(init?: Partial<ComponentDto>) {
     Object.assign(this, init);
@@ -82,6 +85,7 @@ export class ComponentRequest {
   public packages?: ComponentPackageRequest[];
   /** Same shape for the stops: omitted keeps them, an empty list clears them. */
   public upgradeStops?: UpgradeStopRequest[];
+  public dependencies?: ComponentDependencyRequest[];
 
   constructor(init?: Partial<ComponentRequest>) {
     Object.assign(this, init);

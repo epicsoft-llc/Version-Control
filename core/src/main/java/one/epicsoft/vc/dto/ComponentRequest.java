@@ -121,4 +121,9 @@ public class ComponentRequest {
   @Nullable
   @JsonProperty("upgradeStops")
   private List<@Valid UpgradeStopRequest> upgradeStops;
+
+  /** What this component needs, in the same shape again. */
+  @Nullable
+  @JsonProperty("dependencies")
+  private List<@Valid ComponentDependencyRequest> dependencies;
 }
