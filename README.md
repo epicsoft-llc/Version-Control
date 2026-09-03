@@ -13,7 +13,9 @@ It is an inventory, not a deployment system. It runs no actions on target hosts,
 application dependencies (Renovate and Dependabot do that), and it does not read the deployed versions
 by itself: you enter them, in the same work step in which you upgrade the component.
 
-> **Status: early.** Everything described here is built, tested and translated.
+> **Status: version 0.1.0.** Everything described here is built, tested and translated. Images are
+> published for `main`; the schema of 0.1.0 is fixed, so an upgrade from here on migrates rather than
+> resets.
 
 ## What it looks like
 
@@ -114,7 +116,7 @@ for the commented `build` block in that file to run local changes.
 core/          Java 25 / Spring Boot 4 backend, REST under /api/v1
 dashboard/     Angular frontend, served by nginx in its own image
 deploy/        compose file for the local stack
-docs/          documentation
+docs/          documentation and the screenshots above
 ```
 
 ### Conventions

@@ -186,8 +186,10 @@ a sentence of our own.
 `core/src/main/resources/db/migration/V{version}__{snake_case}.sql`.
 
 - Always allocate the next free version and bump the project version to match.
-- Never modify a migration that has been applied — add a new one. Until the first production release
-  the init script is edited instead of adding files.
+- Never modify a migration that has been applied — add a new one. `V0.1.0__init.sql` is **closed**: it
+  has been published in an image, so somewhere a database has already applied it, and editing it now
+  makes Flyway refuse to start on exactly that database with a checksum mismatch. Every change to the
+  schema from here on is its own file.
 - UUID primary keys use the native PostgreSQL `uuid` type. Timestamps are `TIMESTAMP(6)` in UTC.
 - On tables with a `deleted` column, uniqueness is a **partial** index `WHERE deleted IS NULL`; a plain
   `UNIQUE` constraint would let a soft deleted row block a re-insert.
