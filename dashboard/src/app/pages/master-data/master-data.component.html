@@ -1,0 +1,363 @@
+<h1 class="h4 mb-3">{{ 'nav.masterData' | translate }}</h1>
+
+@if (errorMessage) {
+  <div class="alert alert-danger py-2">{{ errorMessage }}</div>
+}
+
+<section class="mb-4">
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <h2 class="h6 text-uppercase text-secondary mb-0">{{ 'masterData.section.projects' | translate }}</h2>
+    <button type="button" class="btn btn-sm btn-outline-primary" (click)="newProject()">
+      {{ 'common.new' | translate }}
+    </button>
+  </div>
+
+  @if (projects.length === 0) {
+    <p class="text-secondary">{{ 'masterData.empty' | translate }}</p>
+  } @else {
+    <table class="table table-sm align-middle">
+      <tbody>
+        @for (project of projects; track project.id) {
+          <tr [class.table-active]="project.id === selectedProjectId">
+            <td>
+              <button type="button" class="btn btn-link p-0 text-decoration-none"
+                      (click)="selectProject(project.id)">{{ project.name }}
+              </button>
+            </td>
+            <td class="text-secondary small">{{ project.description }}</td>
+            <td class="text-end">
+              <button type="button" class="btn btn-sm btn-outline-secondary me-1"
+                      (click)="editProject(project)">{{ 'common.edit' | translate }}
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-danger"
+                      (click)="deleteProject(project)">{{ 'common.delete' | translate }}
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  @if (projectForm) {
+    <div class="card card-body mb-3">
+      <div class="mb-2">
+        <label class="form-label" for="projectName">{{ 'common.name' | translate }}</label>
+        <input type="text" class="form-control" id="projectName" name="projectName" [(ngModel)]="projectForm.name">
+      </div>
+      <div class="mb-2">
+        <label class="form-label" for="projectDescription">{{ 'common.description' | translate }}</label>
+        <input type="text" class="form-control" id="projectDescription" name="projectDescription"
+               [(ngModel)]="projectForm.description">
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="projectSortOrder">{{ 'common.sortOrder' | translate }}</label>
+        <input type="number" class="form-control" id="projectSortOrder" name="projectSortOrder"
+               [(ngModel)]="projectForm.sortOrder">
+      </div>
+      <div>
+        <button type="button" class="btn btn-primary me-1" (click)="saveProject()">{{ 'common.save' | translate }}
+        </button>
+        <button type="button" class="btn btn-outline-secondary" (click)="closeForms()">
+          {{ 'common.cancel' | translate }}
+        </button>
+      </div>
+    </div>
+  }
+</section>
+
+@if (selectedProjectId) {
+  <section class="mb-4">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <h2 class="h6 text-uppercase text-secondary mb-0">{{ 'masterData.section.environments' | translate }}</h2>
+      <button type="button" class="btn btn-sm btn-outline-primary" (click)="newEnvironment()">
+        {{ 'common.new' | translate }}
+      </button>
+    </div>
+
+    <table class="table table-sm align-middle">
+      <tbody>
+        @for (environment of environments; track environment.id) {
+          <tr>
+            <td>
+              {{ environment.name }}
+              @if (environment.production) {
+                <i class="bi bi-broadcast text-secondary ms-1" [title]="'matrix.production' | translate"></i>
+              }
+            </td>
+            <td class="text-secondary small">{{ environment.sortOrder }}</td>
+            <td class="text-end">
+              <button type="button" class="btn btn-sm btn-outline-secondary me-1"
+                      (click)="editEnvironment(environment)">{{ 'common.edit' | translate }}
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-danger"
+                      (click)="deleteEnvironment(environment)">{{ 'common.delete' | translate }}
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (environmentForm) {
+      <div class="card card-body mb-3">
+        <div class="mb-2">
+          <label class="form-label" for="environmentName">{{ 'common.name' | translate }}</label>
+          <input type="text" class="form-control" id="environmentName" name="environmentName"
+                 [(ngModel)]="environmentForm.name">
+        </div>
+        <div class="mb-2">
+          <label class="form-label" for="environmentSortOrder">{{ 'common.sortOrder' | translate }}</label>
+          <input type="number" class="form-control" id="environmentSortOrder" name="environmentSortOrder"
+                 [(ngModel)]="environmentForm.sortOrder">
+        </div>
+        <div class="form-check mb-3">
+          <input type="checkbox" class="form-check-input" id="environmentProduction" name="environmentProduction"
+                 [(ngModel)]="environmentForm.production">
+          <label class="form-check-label" for="environmentProduction">
+            {{ 'environment.field.production' | translate }}
+          </label>
+        </div>
+        <div>
+          <button type="button" class="btn btn-primary me-1" (click)="saveEnvironment()">
+            {{ 'common.save' | translate }}
+          </button>
+          <button type="button" class="btn btn-outline-secondary" (click)="closeForms()">
+            {{ 'common.cancel' | translate }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+
+  <section>
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <h2 class="h6 text-uppercase text-secondary mb-0">{{ 'masterData.section.components' | translate }}</h2>
+      <button type="button" class="btn btn-sm btn-outline-primary" (click)="newComponent()">
+        {{ 'common.new' | translate }}
+      </button>
+    </div>
+
+    <table class="table table-sm align-middle">
+      <tbody>
+        @for (component of components; track component.id) {
+          <tr>
+            <td><a [routerLink]="['/components', component.id]">{{ component.name }}</a></td>
+            <td class="text-secondary small">{{ 'sourceType.' + component.sourceType | translate }}</td>
+            <td class="text-secondary small"><code>{{ component.sourceRef }}</code></td>
+            <td class="text-end">
+              <button type="button" class="btn btn-sm btn-outline-secondary me-1"
+                      (click)="editComponent(component)">{{ 'common.edit' | translate }}
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-danger"
+                      (click)="deleteComponent(component)">{{ 'common.delete' | translate }}
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (componentForm) {
+      <div class="card card-body">
+        <div class="row">
+          <div class="col-md-6 mb-2">
+            <label class="form-label" for="componentName">{{ 'common.name' | translate }}</label>
+            <input type="text" class="form-control" id="componentName" name="componentName"
+                   [(ngModel)]="componentForm.name">
+          </div>
+          <div class="col-md-6 mb-2">
+            <label class="form-label" for="componentDescription">{{ 'common.description' | translate }}</label>
+            <input type="text" class="form-control" id="componentDescription" name="componentDescription"
+                   [(ngModel)]="componentForm.description">
+          </div>
+          <div class="col-md-6 mb-2">
+            <label class="form-label" for="componentSourceType">{{ 'component.field.sourceType' | translate }}</label>
+            <select class="form-select" id="componentSourceType" name="componentSourceType"
+                    [(ngModel)]="componentForm.sourceType">
+              @for (type of sourceTypes; track type) {
+                <option [value]="type">{{ 'sourceType.' + type | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="col-md-6 mb-2">
+            <label class="form-label" for="componentSourceRef">{{ 'component.field.sourceRef' | translate }}</label>
+            <input type="text" class="form-control" id="componentSourceRef" name="componentSourceRef"
+                   [(ngModel)]="componentForm.sourceRef">
+          </div>
+          <div class="col-md-6 mb-2">
+            <label class="form-label" for="componentTagPattern">{{ 'component.field.tagPattern' | translate }}</label>
+            <div class="input-group">
+              <input type="text" class="form-control" id="componentTagPattern" name="componentTagPattern"
+                     [(ngModel)]="componentForm.tagPattern">
+              <button type="button" class="btn btn-outline-secondary" [disabled]="previewing || !componentFormId"
+                      (click)="previewRule()">{{ 'preview.action' | translate }}
+              </button>
+            </div>
+            <div class="form-text">{{ 'preview.hint' | translate }}</div>
+
+            @if (preview) {
+              <div class="border rounded p-2 mt-2 small">
+                @if (preview.message) {
+                  <div class="text-danger-emphasis">{{ preview.message }}</div>
+                } @else if (preview.matching.length === 0) {
+                  <div class="text-secondary">{{ 'preview.none' | translate }}</div>
+                } @else {
+                  @if (!preview.matching[0].packageName) {
+                    <div class="mb-1">
+                      {{ 'preview.winner' | translate }}: <strong>{{ preview.winner }}</strong>
+                    </div>
+                  }
+                  <div class="text-secondary">
+                    {{ 'preview.matching' | translate }}:
+                    @for (candidate of preview.matching; track $index) {
+                      <span class="me-2">
+                        @if (candidate.packageName) {
+                          <span class="text-body-secondary">{{ candidate.packageName }}</span>
+                        }
+                        <code>{{ candidate.tag }}</code>
+                      </span>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+          <div class="col-md-6 mb-2">
+            <label class="form-label" for="componentVersionStrategy">
+              {{ 'component.field.versionStrategy' | translate }}
+            </label>
+            <select class="form-select" id="componentVersionStrategy" name="componentVersionStrategy"
+                    [(ngModel)]="componentForm.versionStrategy">
+              @for (strategy of versionStrategies; track strategy) {
+                <option [value]="strategy">{{ 'versionStrategy.' + strategy | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="col-md-6 mb-2">
+            <label class="form-label" for="componentMaxStep">{{ 'component.field.maxStep' | translate }}</label>
+            <select class="form-select" id="componentMaxStep" name="componentMaxStep"
+                    [(ngModel)]="componentForm.maxStep">
+              @for (step of maxSteps; track step) {
+                <option [value]="step">{{ 'maxStep.' + step | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="col-md-6 mb-2">
+            <label class="form-label" for="componentEolProduct">{{ 'component.field.eolProduct' | translate }}</label>
+            <input type="text" class="form-control" id="componentEolProduct" name="componentEolProduct"
+                   [(ngModel)]="componentForm.eolProduct">
+          </div>
+        </div>
+
+        @if (usesPackages()) {
+          <div class="row">
+            <div class="col-md-4 mb-2">
+              <label class="form-label" for="componentAptSuite">{{ 'component.field.aptSuite' | translate }}</label>
+              <input type="text" class="form-control" id="componentAptSuite" name="componentAptSuite"
+                     [(ngModel)]="componentForm.aptSuite">
+            </div>
+            <div class="col-md-4 mb-2">
+              <label class="form-label" for="componentAptComponent">
+                {{ 'component.field.aptComponent' | translate }}
+              </label>
+              <input type="text" class="form-control" id="componentAptComponent" name="componentAptComponent"
+                     [(ngModel)]="componentForm.aptComponent">
+            </div>
+            <div class="col-md-4 mb-2">
+              <label class="form-label" for="componentAptArchitecture">
+                {{ 'component.field.aptArchitecture' | translate }}
+              </label>
+              <input type="text" class="form-control" id="componentAptArchitecture" name="componentAptArchitecture"
+                     [(ngModel)]="componentForm.aptArchitecture">
+            </div>
+          </div>
+
+          <div class="mb-2">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="form-label mb-0">{{ 'component.field.packages' | translate }}</span>
+              <button type="button" class="btn btn-sm btn-outline-primary" (click)="addPackageRow()">
+                {{ 'masterData.packages.add' | translate }}
+              </button>
+            </div>
+            <p class="form-text mt-0">{{ 'masterData.packages.hint' | translate }}</p>
+            @for (row of packageRows; track $index) {
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <input type="text" class="form-control form-control-sm" [name]="'packageName' + $index"
+                       [(ngModel)]="row.name">
+                <div class="form-check text-nowrap mb-0">
+                  <input type="radio" class="form-check-input" name="leadingPackage" [id]="'leading' + $index"
+                       [checked]="row.leadingPackage" (change)="setLeadingPackage($index)">
+                  <label class="form-check-label small" [for]="'leading' + $index">
+                    {{ 'masterData.packages.leading' | translate }}
+                  </label>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger" (click)="removePackageRow($index)">
+                  {{ 'common.remove' | translate }}
+                </button>
+              </div>
+            }
+          </div>
+        }
+
+        <div class="mb-2">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="form-label mb-0">{{ 'proposal.stops' | translate }}</span>
+            <button type="button" class="btn btn-sm btn-outline-primary" (click)="addStopRow()">
+              {{ 'masterData.stops.add' | translate }}
+            </button>
+          </div>
+          <p class="form-text mt-0">{{ 'masterData.stops.hint' | translate }}</p>
+          @for (row of stopRows; track $index) {
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <input type="text" class="form-control form-control-sm w-auto" [name]="'stopVersion' + $index"
+                     [(ngModel)]="row.version" [placeholder]="'component.column.version' | translate">
+              <input type="text" class="form-control form-control-sm" [name]="'stopNote' + $index"
+                     [(ngModel)]="row.note" [placeholder]="'masterData.stops.note' | translate">
+              <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeStopRow($index)">
+                {{ 'common.remove' | translate }}
+              </button>
+            </div>
+          }
+        </div>
+
+        <div class="mb-2">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="form-label mb-0">{{ 'dependency.section' | translate }}</span>
+            <button type="button" class="btn btn-sm btn-outline-primary" (click)="addDependencyRow()">
+              {{ 'masterData.dependencies.add' | translate }}
+            </button>
+          </div>
+          <p class="form-text mt-0">{{ 'masterData.dependencies.hint' | translate }}</p>
+          @for (row of dependencyRows; track $index) {
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <select class="form-select form-select-sm w-auto" [name]="'dependsOn' + $index"
+                      [(ngModel)]="row.dependsOnId">
+                <option value="">{{ 'masterData.dependencies.choose' | translate }}</option>
+                @for (option of prerequisites; track option.id) {
+                  <option [value]="option.id">{{ option.name }}</option>
+                }
+              </select>
+              <input type="text" class="form-control form-control-sm w-auto" [name]="'range' + $index"
+                     [(ngModel)]="row.versionRange" placeholder="&gt;=14 &lt;18">
+              <input type="text" class="form-control form-control-sm" [name]="'dependencyNote' + $index"
+                     [(ngModel)]="row.note" [placeholder]="'masterData.stops.note' | translate">
+              <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeDependencyRow($index)">
+                {{ 'common.remove' | translate }}
+              </button>
+            </div>
+          }
+        </div>
+
+        <div class="mt-2">
+          <button type="button" class="btn btn-primary me-1" (click)="saveComponent()">
+            {{ 'common.save' | translate }}
+          </button>
+          <button type="button" class="btn btn-outline-secondary" (click)="closeForms()">
+            {{ 'common.cancel' | translate }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+}

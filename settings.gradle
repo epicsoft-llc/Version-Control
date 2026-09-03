@@ -1,0 +1,73 @@
+// An optional package mirror, configured through the environment or through the
+// developer's ~/.gradle/gradle.properties — nothing about it is stored here.
+// Without it the build resolves from the Gradle Plugin Portal and Maven Central.
+//
+//   VC_GRADLE_PLUGIN_MIRROR_URL   vcGradlePluginMirrorUrl
+//   VC_MAVEN_MIRROR_URL           vcMavenMirrorUrl
+//   VC_MAVEN_MIRROR_USERNAME      vcMavenMirrorUsername
+//   VC_MAVEN_MIRROR_PASSWORD      vcMavenMirrorPassword
+//
+// The lookups sit inside the blocks because pluginManagement must come first.
+
+pluginManagement {
+  repositories {
+    final def mirror = System.getenv("VC_GRADLE_PLUGIN_MIRROR_URL")
+      ?: settings.providers.gradleProperty("vcGradlePluginMirrorUrl").orNull
+    if (mirror) {
+      maven {
+        url = mirror
+        final def user = System.getenv("VC_MAVEN_MIRROR_USERNAME")
+          ?: settings.providers.gradleProperty("vcMavenMirrorUsername").orNull
+        final def pass = System.getenv("VC_MAVEN_MIRROR_PASSWORD")
+          ?: settings.providers.gradleProperty("vcMavenMirrorPassword").orNull
+        if (user && pass) {
+          credentials {
+            username = user
+            password = pass
+          }
+        }
+      }
+    }
+    gradlePluginPortal()
+    // Public, readable without credentials: one.epicsoft.deps-update, one.epicsoft.tolgee
+    maven { url = "https://gitlab.com/api/v4/projects/82634030/packages/maven" }
+    maven { url = "https://gitlab.com/api/v4/projects/85970987/packages/maven" }
+  }
+}
+
+dependencyResolutionManagement {
+  // Repositories are declared here and nowhere else.
+  repositoriesMode = RepositoriesMode.FAIL_ON_PROJECT_REPOS
+  repositories {
+    final def mirror = System.getenv("VC_MAVEN_MIRROR_URL")
+      ?: settings.providers.gradleProperty("vcMavenMirrorUrl").orNull
+    if (mirror) {
+      maven {
+        url = mirror
+        final def user = System.getenv("VC_MAVEN_MIRROR_USERNAME")
+          ?: settings.providers.gradleProperty("vcMavenMirrorUsername").orNull
+        final def pass = System.getenv("VC_MAVEN_MIRROR_PASSWORD")
+          ?: settings.providers.gradleProperty("vcMavenMirrorPassword").orNull
+        if (user && pass) {
+          credentials {
+            username = user
+            password = pass
+          }
+        }
+      }
+    }
+    mavenCentral()
+  }
+  versionCatalogs {
+    libs {
+      from(files("libs.versions.toml"))
+    }
+  }
+}
+
+rootProject.name = "version-control"
+
+include ":core"
+
+// The Angular dashboard is managed with npm and the Angular CLI, not as a
+// Gradle subproject. Build it with `npm run build` inside dashboard/.

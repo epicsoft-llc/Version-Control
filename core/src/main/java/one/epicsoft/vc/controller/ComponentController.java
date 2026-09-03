@@ -1,0 +1,95 @@
+package one.epicsoft.vc.controller;
+
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import one.epicsoft.vc.dto.ComponentDto;
+import one.epicsoft.vc.dto.ComponentRequest;
+import one.epicsoft.vc.dto.DependencyCheckDto;
+import one.epicsoft.vc.dto.UpgradeProposalDto;
+import one.epicsoft.vc.facade.ComponentFacade;
+import one.epicsoft.vc.facade.DependencyFacade;
+import one.epicsoft.vc.facade.UpgradeProposalFacade;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import java.util.List;
+import java.util.UUID;
+
+@Slf4j
+@RestController
+@RequestMapping(value = ComponentController.PATH_PREFIX,
+                consumes = MediaType.APPLICATION_JSON_VALUE,
+                produces = MediaType.APPLICATION_JSON_VALUE)
+@RequiredArgsConstructor
+public class ComponentController {
+
+  public static final String PATH_PREFIX = "api/v1/components";
+
+  private final ComponentFacade componentFacade;
+  private final UpgradeProposalFacade upgradeProposalFacade;
+  private final DependencyFacade dependencyFacade;
+
+  @GetMapping(consumes = MediaType.ALL_VALUE)
+  public ResponseEntity<List<ComponentDto>> findAllByProject(@RequestParam final UUID projectId) {
+    log.debug("Incoming GET 'api/v1/components?projectId={}'", projectId);
+    return ResponseEntity.ok(this.componentFacade.findAllByProject(projectId));
+  }
+
+  @GetMapping(path = "/{id}", consumes = MediaType.ALL_VALUE)
+  public ResponseEntity<ComponentDto> getById(@PathVariable final UUID id) {
+    log.debug("Incoming GET 'api/v1/components/{}'", id);
+    return ResponseEntity.ok(this.componentFacade.getById(id));
+  }
+
+  /**
+   * What to do next in each environment: the permissible target, the note about a
+   * larger jump, the versions that cannot be skipped, and what to read first.
+   */
+  @GetMapping(path = "/{id}/proposals", consumes = MediaType.ALL_VALUE)
+  public ResponseEntity<List<UpgradeProposalDto>> getProposals(@PathVariable final UUID id) {
+    log.debug("Incoming GET proposals for component {}", id);
+    return ResponseEntity.ok(this.upgradeProposalFacade.getByComponent(id));
+  }
+
+  /**
+   * What this component needs and what needs it, evaluated per environment. Both
+   * directions, because the second is what says whether an update breaks anything.
+   */
+  @GetMapping(path = "/{id}/dependencies", consumes = MediaType.ALL_VALUE)
+  public ResponseEntity<List<DependencyCheckDto>> getDependencies(@PathVariable final UUID id,
+                                                                  @RequestParam(defaultValue = "false")
+                                                                  final boolean dependents) {
+    log.debug("Incoming GET dependencies of component {} (dependents={})", id, dependents);
+    return ResponseEntity.ok(dependents ? this.dependencyFacade.checkDependents(id)
+                                        : this.dependencyFacade.checkComponent(id));
+  }
+
+  @PostMapping
+  public ResponseEntity<ComponentDto> create(@RequestBody @Valid final ComponentRequest request) {
+    log.debug("Incoming POST 'api/v1/components' with: {}", request);
+    return ResponseEntity.ok(this.componentFacade.create(request));
+  }
+
+  @PutMapping("/{id}")
+  public ResponseEntity<ComponentDto> update(@PathVariable final UUID id,
+                                             @RequestBody @Valid final ComponentRequest request) {
+    log.debug("Incoming PUT 'api/v1/components/{}' with: {}", id, request);
+    return ResponseEntity.ok(this.componentFacade.update(id, request));
+  }
+
+  @DeleteMapping(path = "/{id}", consumes = MediaType.ALL_VALUE)
+  public ResponseEntity<Void> delete(@PathVariable final UUID id) {
+    log.debug("Incoming DELETE 'api/v1/components/{}'", id);
+    this.componentFacade.delete(id);
+    return ResponseEntity.noContent().build();
+  }
+}

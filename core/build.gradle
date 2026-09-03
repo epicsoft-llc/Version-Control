@@ -1,0 +1,211 @@
+plugins {
+  id "java"
+  alias(libs.plugins.spring.boot)
+  alias(libs.plugins.spring.dependency.management)
+  alias(libs.plugins.epicsoft.tolgee)
+}
+
+description = "Version Control backend"
+
+base {
+  archivesName = "vc-core"
+}
+
+// Executable jar only. With both, "vc-core-<version>-plain.jar" sorts first and
+// ends up in the image, which then dies with "no main manifest attribute".
+tasks.named("jar") {
+  enabled = false
+}
+
+java {
+  sourceCompatibility = JavaVersion.VERSION_25
+  targetCompatibility = JavaVersion.VERSION_25
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(25)
+  }
+}
+
+configurations {
+  compileOnly {
+    extendsFrom annotationProcessor
+  }
+}
+
+dependencies {
+  // #### RUNTIME #############################################################
+  runtimeOnly "org.postgresql:postgresql"
+  runtimeOnly "org.flywaydb:flyway-database-postgresql"
+
+  // #### IMPL ################################################################
+  implementation "org.springframework.boot:spring-boot-starter-web"
+  implementation "org.springframework.boot:spring-boot-starter-actuator"
+  implementation "org.springframework.boot:spring-boot-starter-data-jpa"
+  implementation "org.springframework.boot:spring-boot-starter-validation"
+  implementation "org.springframework.boot:spring-boot-starter-flyway"
+  implementation "jakarta.persistence:jakarta.persistence-api"
+  implementation "jakarta.validation:jakarta.validation-api"
+  implementation "org.flywaydb:flyway-core"
+  implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310"
+  implementation libs.semver4j
+
+  // #### TEST ################################################################
+  testImplementation "org.springframework.boot:spring-boot-starter-test"
+  //// MockMvc lives in its own starter since Spring Boot 4.
+  testImplementation "org.springframework.boot:spring-boot-starter-webmvc-test"
+  testImplementation libs.testcontainers.postgresql
+  testImplementation libs.testcontainers.junit
+  testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+
+  // #### Lombok and MapStruct ################################################
+  // #### Note the order — therefore in a block of its own ####################
+  annotationProcessor libs.lombok
+  compileOnly libs.lombok
+  annotationProcessor libs.lombok.mapstruct.binding
+  annotationProcessor libs.mapstruct.processor
+  implementation libs.mapstruct
+  testCompileOnly libs.lombok
+  testAnnotationProcessor libs.lombok
+
+  // #### DEV #################################################################
+  developmentOnly "org.springframework.boot:spring-boot-devtools"
+}
+
+// ###########################################################
+// #### Translations (Tolgee)
+// #### ./gradlew :core:pullTranslations
+// #### ./gradlew :core:verifyTranslations
+// ###########################################################
+// Instance and project come from the environment, never from this repository.
+// verifyTranslations needs neither, so `check` stays green without them.
+tolgee {
+  //// Environment first, then ~/.gradle/gradle.properties.
+  url = providers.environmentVariable("VC_TOLGEE_URL").orElse(providers.gradleProperty("vcTolgeeUrl"))
+  projectId = providers.environmentVariable("VC_TOLGEE_PROJECT_ID")
+                       .orElse(providers.gradleProperty("vcTolgeeProjectId"))
+                       .map { Integer.parseInt(it) }
+  //// Which keys this artifact consumes — a property of the module.
+  tag = "core"
+  languages = ["de", "en"]
+  outputDir = layout.projectDirectory.dir("src/main/resources/messages")
+  fallbackLanguage = "en"
+  //// The variable's name, never the token.
+  apiKeyEnv = "VC_TOLGEE_API_KEY"
+}
+
+// Verification is offline and cheap, so both run with `check`. The download
+// stays manual — an ordinary build must not need the network.
+tasks.named("check") {
+  dependsOn tasks.named("verifyTranslations")
+  dependsOn tasks.named("verifyMessageKeys")
+}
+
+// ###########################################################
+// #### ./gradlew :core:verifyMessageKeys
+// ###########################################################
+// What `verifyTranslations` cannot see: it compares the exported files against
+// each other, so a key the code asks for and Tolgee never had is complete and
+// missing at the same time. `TranslationService` then hands the key itself to
+// whoever reads the message — the Telegram line says "taskSection.UPDATE_OPEN"
+// and nothing anywhere reports a fault.
+//
+// Dynamic keys are resolved, not skipped: "taskSection." + section.name() is
+// expanded over the constants of the enum of that name.
+//
+// Keys are collected by where they are written, never by what they start with.
+// A list of known prefixes looks tidy and is the same silent pass this task
+// exists to remove: the first key of a new family is simply not seen, and the
+// task reports that everything is present. The two places are the contract in
+// CODE_CONVENTION.md — a call on the translation service, and the message key
+// an AppException carries.
+tasks.register("verifyMessageKeys") {
+  group = "verification"
+  description = "Checks that every message key used in the code exists in the fallback bundle"
+
+  final def sources = fileTree("src/main/java") { include "**/*.java" }
+  final def bundle = file("src/main/resources/messages/en.json")
+  inputs.files(sources)
+  inputs.file(bundle)
+  outputs.upToDateWhen { false }
+
+  doLast {
+    //// this.translationService.get("key" ... — and the dynamic form, where the
+    //// literal ends in a dot and is joined with an enum constant.
+    final def call = ~/[Tt]ranslationService\.get\(\s*"([^"]+)"/
+    //// The messageKey an exception carries. Authored in the exception package
+    //// and in the handler that maps the framework's own errors, both by
+    //// convention; a key elsewhere is a convention break, not a gap here.
+    final def keyShape = ~/"([a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)+\.?)"/
+    final def used = [] as Set
+    final def prefixes = [] as Set
+    final def collect = { String key -> (key.endsWith(".") ? prefixes : used) << key }
+    sources.each { source ->
+      final String text = source.text
+      text.findAll(call) { match, key -> collect(key) }
+      if (source.path.replace("\\", "/") =~ "/exception/|/AppExceptionHandler\\.java\$") {
+        text.findAll(keyShape) { match, key -> collect(key) }
+      }
+    }
+    prefixes.each { prefix ->
+      //// taskSection. -> TaskSection: the prefix names the enum it iterates.
+      final String enumName = prefix[0..-2].split("\\.").collect { it[0].toUpperCase() + it[1..-1] }.join("")
+      final def enumFile = file("src/main/java/one/epicsoft/vc/enums/${enumName}.java")
+      if (!enumFile.exists()) {
+        throw new GradleException("Message key prefix ${prefix} has no enum ${enumName} to expand it")
+      }
+      //// String literals go first, then comments, then the block is cut. Every
+      //// landmark this needs also occurs inside one of the two: the {@link} of
+      //// a class javadoc holds the first brace, a javadoc sentence with a
+      //// semicolon ends the constants four names early, and a constant
+      //// carrying a URL ("scheme://host") turns the rest of its line into a
+      //// comment. Each of them silently, and the task then passes for keys
+      //// nobody ever created.
+      final String body = enumFile.text.replaceAll(~/"(?:[^"\\]|\\.)*"/, '""')
+                                       .replaceAll(~/(?s)\/\*.*?\*\//, "")
+                                       .replaceAll(~/\/\/[^\n]*/, "")
+      final int declaration = body.indexOf("enum ${enumName}")
+      if (declaration < 0) {
+        throw new GradleException("${enumFile.name} declares no enum ${enumName}")
+      }
+      final int open = body.indexOf("{", declaration) + 1
+      //// A semicolon closes the constants where members follow, a brace where
+      //// the enum holds nothing else.
+      final int end = [body.indexOf(";", open), body.indexOf("}", open)].findAll { it >= 0 }.min()
+      //// The name of each constant is the identifier the element starts with.
+      //// Every uppercase word in the region is not the same thing: an argument
+      //// like MANUAL(Defaults.NONE) would invent the constant NONE, and a
+      //// one-letter constant would be dropped by a pattern demanding two.
+      int depth = 0
+      final StringBuilder element = new StringBuilder()
+      final def elements = []
+      body.substring(open, end).each { character ->
+        if (character == "(" || character == "{") {
+          depth++
+        } else if (character == ")" || character == "}") {
+          depth--
+        }
+        if (character == "," && depth == 0) {
+          elements << element.toString()
+          element.setLength(0)
+        } else {
+          element.append(character)
+        }
+      }
+      elements << element.toString()
+      elements.each { candidate ->
+        final def name = (candidate.trim() =~ /^([A-Z][A-Z_0-9]*)/)
+        if (name) {
+          used << prefix + name[0][1]
+        }
+      }
+    }
+
+    final def texts = new groovy.json.JsonSlurper().parse(bundle)
+    final def missing = used.findAll { !texts[it] }.sort()
+    if (!missing.isEmpty()) {
+      throw new GradleException("${missing.size()} message key(s) are missing from ${bundle.name}:\n  "
+                                    + missing.join("\n  ")
+                                    + "\nRun ./gradlew :core:pullTranslations once they exist in Tolgee.")
+    }
+    logger.lifecycle("Message keys: ${used.size()} used, all present in ${bundle.name}.")
+  }
+}

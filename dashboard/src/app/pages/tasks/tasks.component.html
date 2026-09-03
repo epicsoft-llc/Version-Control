@@ -1,0 +1,89 @@
+<div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+  <h1 class="h4 mb-0">{{ 'nav.tasks' | translate }}</h1>
+  @if (projects.length > 1) {
+    <select class="form-select form-select-sm w-auto"
+            name="project"
+            [ngModel]="selectedProjectId"
+            (ngModelChange)="selectProject($event)">
+      @for (project of projects; track project.id) {
+        <option [value]="project.id">{{ project.name }}</option>
+      }
+    </select>
+  }
+</div>
+
+@if (errorMessage) {
+  <div class="alert alert-danger py-2">{{ errorMessage }}</div>
+}
+
+@if (!loading && projects.length === 0) {
+  <p class="text-secondary">{{ 'matrix.noProjects' | translate }}</p>
+} @else if (list && list.sections.length === 0) {
+  <p class="text-secondary">{{ 'tasks.empty' | translate }}</p>
+} @else if (list) {
+  @for (section of list.sections; track section.section) {
+    <section class="mb-4">
+      <h2 class="h6 text-uppercase text-secondary">
+        {{ 'taskSection.' + section.section | translate }}
+        <span class="badge text-bg-secondary ms-1">{{ section.entries.length }}</span>
+      </h2>
+
+      <table class="table table-sm align-middle">
+        <tbody>
+          @for (entry of section.entries; track $index) {
+            <tr>
+              <th scope="row" class="fw-normal">
+                <a [routerLink]="['/components', entry.componentId]">{{ entry.componentName }}</a>
+                @if (entry.environmentName) {
+                  <span class="text-secondary ms-1">&middot; {{ entry.environmentName }}</span>
+                }
+              </th>
+              <td>
+                @if (entry.currentVersion) {
+                  <span class="text-secondary">{{ entry.currentVersion }}</span>
+                }
+                @if (entry.currentVersion && entry.latestVersion) {
+                  <i class="bi bi-arrow-right mx-1"></i>
+                }
+                @if (entry.latestVersion) {
+                  <span class="fw-semibold">{{ entry.latestVersion }}</span>
+                }
+              </td>
+              <td class="small text-secondary">
+                @for (constraint of entry.constraints; track $index) {
+                  <div>
+                    {{ constraint.componentName }}
+                    {{ 'dependency.needs' | translate }} {{ constraint.dependsOnName }}
+                    <code>{{ constraint.versionRange }}</code>
+                    @if (constraint.actualVersion) {
+                      <!-- Behind the prerequisite, never behind the dependent: the version
+                           belongs to what is required, and in front it reads as the
+                           version of the component that needs it. -->
+                      <span class="ms-1">({{ constraint.actualVersion }})</span>
+                    }
+                    <span class="badge ms-1"
+                          [class.text-bg-danger]="constraint.state === 'VIOLATED'"
+                          [class.text-bg-secondary]="constraint.state === 'UNKNOWN'">
+                      {{ 'constraintState.' + constraint.state | translate }}
+                    </span>
+                  </div>
+                }
+                {{ entry.detail }}
+                @if (entry.since) {
+                  <div>{{ 'tasks.since' | translate }}: {{ entry.since | date: 'mediumDate' }}</div>
+                }
+              </td>
+              <td class="text-end">
+                @if (decidable(section.section)) {
+                  <button type="button" class="btn btn-sm btn-outline-primary"
+                          (click)="openDecision(entry)">{{ 'tasks.action.decide' | translate }}
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+}

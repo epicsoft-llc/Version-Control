@@ -1,0 +1,42 @@
+[versions]
+###############################################################################
+#### Library and plugin versions
+###############################################################################
+#### https://plugins.gradle.org/plugin/org.springframework.boot
+springBoot = "4.1.1"
+#### https://plugins.gradle.org/plugin/io.spring.dependency-management
+springDependencyManagement = "1.1.7"
+#### https://gitlab.com/epicsoft-networks/gradle-plugin-depcheck
+epicsoftDepsUpdate = "0.2.5"
+#### https://gitlab.com/epicsoft-networks/gradle-plugin-tolgee
+epicsoftTolgee = "1.0.2"
+#### https://mvnrepository.com/artifact/org.projectlombok/lombok
+lombok = "1.18.48"
+#### https://mvnrepository.com/artifact/org.mapstruct/mapstruct
+mapstruct = "1.6.3"
+#### https://mvnrepository.com/artifact/org.projectlombok/lombok-mapstruct-binding
+lombokMapstructBinding = "0.2.0"
+#### https://mvnrepository.com/artifact/org.semver4j/semver4j
+#### Comparison, patch/minor/major classification and node-semver ranges.
+#### Deliberately NOT used for Debian versions — see the plan, section 5.
+semver4j = "6.0.0"
+#### https://plugins.gradle.org/plugin/org.owasp.dependencycheck
+dependencyCheck = "13.0.0"
+#### https://mvnrepository.com/artifact/org.testcontainers/postgresql
+testcontainers = "1.21.4"
+
+[libraries]
+lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
+lombok-mapstruct-binding = { module = "org.projectlombok:lombok-mapstruct-binding", version.ref = "lombokMapstructBinding" }
+mapstruct = { module = "org.mapstruct:mapstruct", version.ref = "mapstruct" }
+mapstruct-processor = { module = "org.mapstruct:mapstruct-processor", version.ref = "mapstruct" }
+semver4j = { module = "org.semver4j:semver4j", version.ref = "semver4j" }
+testcontainers-postgresql = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
+testcontainers-junit = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "springDependencyManagement" }
+epicsoft-deps-update = { id = "one.epicsoft.deps-update", version.ref = "epicsoftDepsUpdate" }
+epicsoft-tolgee = { id = "one.epicsoft.tolgee", version.ref = "epicsoftTolgee" }
+dependency-check = { id = "org.owasp.dependencycheck", version.ref = "dependencyCheck" }

@@ -1,0 +1,79 @@
+# Local stack: PostgreSQL, backend, dashboard. The dashboard is the entry point;
+# it serves the interface and forwards /api.
+#
+#   cp ../.env.example ../.env   and fill it in
+#   docker compose up
+#
+# Swap `image` for the commented `build` block to run local changes.
+# VC_IMAGE_TAG picks the branch the images came from (default: main).
+
+name: version-control
+
+services:
+
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${VC_DATABASE_NAME:-versioncontrol}
+      POSTGRES_USER: ${VC_DATABASE_USERNAME:?set VC_DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${VC_DATABASE_PASSWORD:?set VC_DATABASE_PASSWORD}
+    volumes:
+      #### Not /var/lib/postgresql/data: 18+ keeps its data in a major-version
+      #### subdirectory and refuses to start when that path is mounted directly.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${VC_DATABASE_USERNAME} -d ${VC_DATABASE_NAME:-versioncontrol}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  core:
+    image: registry.gitlab.com/epicsoft-networks/version-control:vc-core-${VC_IMAGE_TAG:-main}
+    # build:
+    #   context: ../core
+    #   args:
+    #     JAR_FILE: build/libs/vc-core-0.1.0.jar
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      VC_DATABASE_HOST: postgres
+      VC_DATABASE_PORT: 5432
+      VC_DATABASE_NAME: ${VC_DATABASE_NAME:-versioncontrol}
+      VC_DATABASE_USERNAME: ${VC_DATABASE_USERNAME}
+      VC_DATABASE_PASSWORD: ${VC_DATABASE_PASSWORD}
+      # Optional; unset disables the feature instead of half-configuring it.
+      VC_GITHUB_TOKEN: ${VC_GITHUB_TOKEN:-}
+      VC_TELEGRAM_BOT_TOKEN: ${VC_TELEGRAM_BOT_TOKEN:-}
+      VC_TELEGRAM_CHAT_ID: ${VC_TELEGRAM_CHAT_ID:-}
+    healthcheck:
+      # The actuator port stays inside this network.
+      test: [ "CMD-SHELL", "wget -q -O - http://127.0.0.1:8090/actuator/health | grep '\"status\":\"UP\"'" ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+
+  dashboard:
+    image: registry.gitlab.com/epicsoft-networks/version-control:vc-dashboard-${VC_IMAGE_TAG:-main}
+    # build:
+    #   context: ../dashboard
+    restart: unless-stopped
+    depends_on:
+      core:
+        condition: service_healthy
+    ports:
+      - "${VC_HTTP_PORT:-8081}:80"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+volumes:
+  postgres-data:

@@ -1,0 +1,16 @@
+// The dev server stands in for the dashboard container: it serves the interface
+// and forwards /api to the backend, so the browser only ever talks to one
+// origin. Without it the interface would call another port, the browser would
+// refuse it as cross-origin, and the backend would have to allow origins it must
+// not allow in production.
+//
+// Comments belong in lines like these, never in a "//" key: every key here is a
+// path context, so a "//" key registers a proxy rule for every path that starts
+// with a double slash and sends it to the comment text as its target.
+{
+  "/api": {
+    "target": "http://localhost:8080",
+    "secure": false,
+    "changeOrigin": false
+  }
+}

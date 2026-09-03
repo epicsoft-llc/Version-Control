@@ -1,0 +1,249 @@
+###############################################################################
+#### Branch / Tag | Meaning
+#### -------------|--------
+#### develop      | work in progress
+#### main         | released state
+#### X.Y.Z (Tag)  | release
+###############################################################################
+
+stages:
+  - build
+  - test
+  - license
+  - dependency
+  - security
+  - artifact
+
+variables:
+  VERSION: ${CI_COMMIT_REF_NAME}
+  GRADLE_OPTS: "-Dorg.gradle.console=plain -Dorg.gradle.daemon=false"
+  GRADLE_USER_HOME: "${CI_PROJECT_DIR}/.gradle"
+  #### Official images only — this repository is public and must build for
+  #### anyone, without an account anywhere.
+  JDK_IMAGE: eclipse-temurin:25-jdk
+  JRE_IMAGE_VERSION: 25-jre-alpine
+  NODE_IMAGE: node:24-alpine
+  BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
+
+#### No pipeline for merge requests — the branch pipeline is the verification.
+workflow:
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+      when: never
+    - when: always
+
+.gradle-cache: &gradle-cache
+  key: vc-gradle-${CI_COMMIT_REF_SLUG}
+  paths: [ "${GRADLE_USER_HOME}/caches", "${GRADLE_USER_HOME}/wrapper" ]
+  policy: pull-push
+
+.node-cache: &node-cache
+  key: vc-node-${CI_COMMIT_REF_SLUG}
+  paths: [ "dashboard/node_modules" ]
+  policy: pull-push
+
+###############################################################################
+#### core (backend)
+###############################################################################
+BLD:core:
+  stage: build
+  image: ${JDK_IMAGE}
+  before_script:
+    - chmod +x gradlew
+  script:
+    - ./gradlew :core:clean :core:assemble -x test
+  cache: *gradle-cache
+  artifacts:
+    name: "vc-core-${CI_COMMIT_REF_NAME}-${CI_PIPELINE_ID}"
+    paths: [ "core/build" ]
+    expire_in: 1h
+  retry: 1
+
+TST:core:
+  stage: test
+  image: ${JDK_IMAGE}
+  services:
+    #### PostgreSQL as a service, not Testcontainers inside dind: the job then
+    #### needs no Docker at all, and one database less is pulled and started.
+    #### Locally the same tests start their own container — see
+    #### AbstractIntegrationTest.
+    - name: postgres:18-alpine
+      alias: postgres
+  variables:
+    #### No password anywhere: the service listens only inside this job's network
+    #### and lives for the length of it, so "trust" is both safe and honest —
+    #### a made-up password in a public file would only look like a secret.
+    POSTGRES_DB: versioncontrol
+    POSTGRES_USER: vc
+    POSTGRES_HOST_AUTH_METHOD: trust
+    #### Read by application.yml; VC_DATABASE_HOST is also what tells the tests
+    #### to use this database instead of starting one.
+    VC_DATABASE_HOST: postgres
+    VC_DATABASE_NAME: versioncontrol
+    VC_DATABASE_USERNAME: vc
+    VC_DATABASE_PASSWORD: ""
+  before_script:
+    - chmod +x gradlew
+  script:
+    #### check, not test: the offline verifications hang off `check`, and a job
+    #### that only runs the tests leaves them switched off in the one place
+    #### where nobody would notice.
+    - ./gradlew :core:check
+  coverage: '/Total.*?([0-9]{1,3})%/'
+  cache: *gradle-cache
+  artifacts:
+    name: "vc-core-test-${CI_COMMIT_REF_NAME}-${CI_PIPELINE_ID}"
+    paths: [ "core/build/reports" ]
+    reports:
+      junit: core/build/test-results/test/TEST-*.xml
+    expire_in: 1h
+  needs: [ "BLD:core" ]
+  retry: 1
+
+#### The task fails on available updates; allow_failure turns that into a
+#### warning rather than a stop — red for an update teaches people to ignore red.
+DEP:core:
+  stage: dependency
+  image: ${JDK_IMAGE}
+  before_script:
+    - chmod +x gradlew
+  script:
+    - ./gradlew checkDependencyUpdates
+  cache:
+    <<: *gradle-cache
+    policy: pull
+  needs: [ "BLD:core" ]
+  allow_failure: true
+
+#### Runs only when the VC_DEPCHECK_* variables exist, so nothing about that
+#### database is described here and no contributor is blocked by it.
+SEC:core:
+  stage: security
+  image: ${JDK_IMAGE}
+  before_script:
+    - chmod +x gradlew
+  script:
+    #### Redacted because GitLab cannot mask a connection string (slashes) and
+    #### job logs of a public project are readable by anyone.
+    - set -o pipefail
+    - ./gradlew :core:dependencyCheckAnalyze 2>&1
+      | sed -e "s|${VC_DEPCHECK_URL}|[redacted]|g"
+            -e "s|${VC_DEPCHECK_USERNAME}|[redacted]|g"
+            -e "s|${VC_DEPCHECK_PASSWORD}|[redacted]|g"
+  cache:
+    <<: *gradle-cache
+    policy: pull
+  artifacts:
+    name: "vc-core-security-${CI_COMMIT_REF_NAME}-${CI_PIPELINE_ID}"
+    paths: [ "core/build/reports" ]
+    when: always
+    expire_in: 1 week
+  needs: [ "BLD:core" ]
+  rules:
+    - if: '$VC_DEPCHECK_URL && $VC_DEPCHECK_USERNAME && $VC_DEPCHECK_PASSWORD'
+  tags: [ "$VC_DEPCHECK_RUNNER_TAG" ]
+  allow_failure: true
+
+###############################################################################
+#### dashboard (frontend)
+###############################################################################
+#### Without the VC_NPM_* variables npm uses the public registry.
+#### Shared by both dashboard jobs, so the registry setup cannot drift apart
+#### between the one that builds and the one that tests.
+.npm-setup: &npm-setup
+  - |
+    #### Credential keys are derived from the registry URL itself, so the two
+    #### cannot disagree — npm then finds no credentials and gets a 401.
+    #### Nothing here may print a value: job logs are public.
+    if [ -n "$VC_NPM_REGISTRY" ]; then
+      base="${VC_NPM_REGISTRY%/}/"
+      key="${base#http*:}"
+      {
+        echo "registry=$base"
+        echo "${key}:username=$VC_NPM_USERNAME"
+        echo "${key}:_password=$(printf '%s' "$VC_NPM_PASSWORD" | base64 | tr -d '\n')"
+      } > "$HOME/.npmrc"
+      unset NPM_CONFIG_REGISTRY
+      echo "npm: mirror configured"
+    else
+      echo "npm: public registry"
+    fi
+  - cd dashboard
+
+BLD:dashboard:
+  stage: build
+  image: ${NODE_IMAGE}
+  before_script: *npm-setup
+  script:
+    - npm ci --no-audit --no-fund
+    - node scripts/i18n-pull.mjs
+    #### After the pull, so it judges the state the build actually uses.
+    - npm run i18n:verify
+    - npm run build
+  cache: *node-cache
+  artifacts:
+    name: "vc-dashboard-${CI_COMMIT_REF_NAME}-${CI_PIPELINE_ID}"
+    paths: [ "dashboard/dist" ]
+    expire_in: 1h
+  retry: 1
+
+#### Runs in jsdom, so no browser and no display are needed in the job.
+TST:dashboard:
+  stage: test
+  image: ${NODE_IMAGE}
+  before_script: *npm-setup
+  script:
+    - npm ci --no-audit --no-fund
+    - npx ng test
+  cache:
+    <<: *node-cache
+    policy: pull
+  needs: [ "BLD:dashboard" ]
+  retry: 1
+
+###############################################################################
+#### Images
+###############################################################################
+.image: &image
+  stage: artifact
+  image: docker:dind
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u gitlab-ci-token -p ${CI_JOB_TOKEN} ${CI_REGISTRY}
+  after_script:
+    - docker logout ${CI_REGISTRY}
+    - rm -f /root/.docker/config.json
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+    - if: '$CI_COMMIT_REF_NAME == "develop"'
+    - if: '$CI_COMMIT_TAG =~ /^\d+\.\d+\.\d+(?:\.\d+)?$/'
+  tags: [ "image" ]
+  retry: 1
+
+IMG:core:
+  <<: *image
+  variables:
+    VC_IMAGE: ${CI_REGISTRY_IMAGE}:vc-core-${VERSION}
+  script:
+    #### Excludes the plain jar — it would start and die with "no main manifest".
+    - JAR_FILE=$(ls core/build/libs/vc-core-*.jar | grep -v -- '-plain' | head -1)
+    - echo "Building ${VC_IMAGE} from ${JAR_FILE}"
+    - docker build --pull -t ${VC_IMAGE} core
+      --build-arg IMAGE_VERSION=${JRE_IMAGE_VERSION}
+      --build-arg APP_VERSION=${VERSION}
+      --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+      --build-arg JAR_FILE=$(basename ${JAR_FILE} | sed 's|^|build/libs/|')
+    - docker push ${VC_IMAGE}
+  needs: [ "BLD:core" ]
+
+IMG:dashboard:
+  <<: *image
+  variables:
+    VC_IMAGE: ${CI_REGISTRY_IMAGE}:vc-dashboard-${VERSION}
+  script:
+    - docker build --pull -t ${VC_IMAGE} dashboard
+      --build-arg APP_VERSION=${VERSION}
+      --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+    - docker push ${VC_IMAGE}
+  needs: [ "BLD:dashboard" ]

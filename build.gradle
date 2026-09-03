@@ -1,0 +1,200 @@
+// ###########################################################
+// #### Update Gradle Wrapper:
+// #### ./gradlew wrapper --gradle-version 9.7.1
+// #### Update ".vfox.toml" as well
+// ###########################################################
+
+plugins {
+  id "idea"
+  id "jacoco"
+  alias(libs.plugins.epicsoft.deps.update)
+  alias(libs.plugins.dependency.check) apply false
+}
+
+group = "one.epicsoft.vc"
+version = "0.1.0"
+
+// ###########################################################
+// #### Dependency updates
+// #### ./gradlew checkDependencyUpdates
+// ###########################################################
+depsUpdate {
+  showAll = true
+  //// Fails the task when anything is behind — the CI job carries
+  //// allow_failure, so it surfaces as a warning without stopping the pipeline.
+  failOnUpdates = true
+  includePreRelease = false
+}
+
+subprojects {
+  apply plugin: "java"
+  apply plugin: "idea"
+  apply plugin: "jacoco"
+
+  group = rootProject.group
+  version = rootProject.version
+
+  idea {
+    module {
+      downloadSources = true
+      downloadJavadoc = true
+    }
+  }
+
+  tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.compilerArgs << "-parameters"
+    // Names the deprecated call instead of the note that one exists. A warning
+    // nobody can locate is a warning that stays.
+    options.compilerArgs << "-Xlint:deprecation"
+  }
+
+  // ###########################################################
+  // #### Test — "integration" needs a real database, from one of two places:
+  // #### a Docker daemon for Testcontainers, or one handed over through
+  // #### VC_DATABASE_HOST (the pipeline attaches PostgreSQL as a service).
+  // ####
+  // #### Skipping the tag is a convenience for a machine that has neither. In
+  // #### CI it would be a green pipeline that tested far less than it claims,
+  // #### so there the build stops instead — at execution time, so that a job
+  // #### running with "-x test" is not affected.
+  // ###########################################################
+  tasks.named("test") {
+    final def databaseHost = System.getenv("VC_DATABASE_HOST")
+    final boolean integrationPossible = (databaseHost != null && !databaseHost.isBlank()) || dockerAvailable()
+
+    doFirst {
+      if (!integrationPossible && System.getenv("CI")) {
+        throw new GradleException("Integration tests cannot run: no Docker daemon answers and " +
+                                  "VC_DATABASE_HOST is unset. Skipping them here would report a " +
+                                  "green build for a test set that never ran.")
+      }
+    }
+
+    useJUnitPlatform {
+      if (!integrationPossible) {
+        excludeTags "integration"
+      }
+    }
+    systemProperty "file.encoding", "UTF-8"
+    testLogging.showStandardStreams = true
+    testLogging.exceptionFormat = "full"
+    finalizedBy("jacocoTestReport")
+  }
+
+  jacocoTestReport {
+    reports {
+      xml.required = true
+      html.required = true
+      csv.required = false
+    }
+  }
+
+  // ###########################################################
+  // #### OWASP dependency check — only when configured
+  // ####
+  // #### ./gradlew :core:dependencyCheckAnalyze
+  // ####
+  // #### Everything about that database comes from the environment, down to the
+  // #### kind of database. Unset means the plugin is not applied at all.
+  // ###########################################################
+  final def depcheckUrl = System.getenv("VC_DEPCHECK_URL")
+  final def depcheckDriver = System.getenv("VC_DEPCHECK_DRIVER")
+  final def depcheckDriverJar = System.getenv("VC_DEPCHECK_DRIVER_JAR")
+  final def depcheckUser = System.getenv("VC_DEPCHECK_USERNAME")
+  final def depcheckPass = System.getenv("VC_DEPCHECK_PASSWORD")
+  if (depcheckUrl && depcheckUser && depcheckPass) {
+    apply plugin: "org.owasp.dependencycheck"
+
+    // The plugin loads the JDBC driver from a jar of its own, not from the build
+    // classpath — naming the class alone ends in "Analysis failed". The
+    // coordinate comes from the environment, so no driver jar lives in this
+    // repository and the kind of database stays out of it.
+    String depcheckDriverPath = null
+    if (depcheckDriverJar) {
+      final def driverDependency = dependencies.create(depcheckDriverJar)
+      driverDependency.transitive = false
+      depcheckDriverPath = configurations.detachedConfiguration(driverDependency).singleFile.absolutePath
+    }
+
+    // A driver jar without the class name is the trap: dependency-check then
+    // loads its default driver from a classloader holding only that jar and
+    // reports "ClassNotFoundException: org.h2.Driver" — which points nowhere
+    // near the actual mistake.
+    if (depcheckDriverJar && !depcheckDriver) {
+      throw new GradleException("VC_DEPCHECK_DRIVER_JAR is set but VC_DEPCHECK_DRIVER is not. " +
+                                "Name the driver class, for example org.mariadb.jdbc.Driver.")
+    }
+    if (depcheckDriver && !depcheckDriverJar) {
+      throw new GradleException("VC_DEPCHECK_DRIVER is set but VC_DEPCHECK_DRIVER_JAR is not. " +
+                                "Name the artifact holding it, for example org.mariadb.jdbc:mariadb-java-client:3.5.8.")
+    }
+
+    // Reports what the plugin was handed, never a value.
+    logger.lifecycle("depcheck: url={} driver={} driverJar={} user={}",
+                     depcheckUrl.replaceFirst(/^(jdbc:[a-z0-9]+:).*/, '$1…') ?: "unset",
+                     depcheckDriver ?: "unset",
+                     depcheckDriverPath ? "resolved" : "unset",
+                     depcheckUser ? "set" : "unset")
+
+    dependencyCheck {
+      autoUpdate = false
+      skipTestGroups = true
+      // developmentOnly never reaches the executable jar, so a finding there is
+      // about something that does not ship.
+      skipConfigurations = ["developmentOnly"]
+      failBuildOnCVSS = 5
+      failOnError = true
+      suppressionFile = "${rootDir}/dependency-suppressions.xml"
+      format = "ALL"
+      // Everything this project is not, plus centralEnabled: that analyzer asks
+      // search.maven.org about every jar, which a runner without direct internet
+      // access cannot do — and the plugin reports it as a bare "Analysis failed".
+      analyzers.assemblyEnabled = false
+      analyzers.retirejs.enabled = false
+      analyzers.nodeEnabled = false
+      analyzers.nodePackage.enabled = false
+      analyzers.nodeAuditEnabled = false
+      analyzers.nuspecEnabled = false
+      analyzers.bundleAuditEnabled = false
+      analyzers.pyPackageEnabled = false
+      analyzers.pyDistributionEnabled = false
+      analyzers.rubygemsEnabled = false
+      analyzers.centralEnabled = false
+      data.connectionString = depcheckUrl
+      if (depcheckDriver) {
+        data.driver = depcheckDriver
+      }
+      if (depcheckDriverPath) {
+        data.driverPath = depcheckDriverPath
+      }
+      data.username = depcheckUser
+      data.password = depcheckPass
+      // The shared database is kept current elsewhere; this build only reads it.
+      nvd.validForHours = 99999
+      nvd.endpoint = ""
+    }
+  }
+
+  // ###########################################################
+  // #### Docker helper — the image build reads the jar name
+  // ###########################################################
+  tasks.register("showJarName") {
+    doLast {
+      println "${jar.archiveBaseName.orNull}-${jar.archiveVersion.orNull}.${jar.archiveExtension.orNull}"
+    }
+  }
+}
+
+/** True when a Docker daemon answers; Testcontainers needs one. */
+static boolean dockerAvailable() {
+  try {
+    final def process = new ProcessBuilder("docker", "info")
+      .redirectErrorStream(true)
+      .start()
+    process.inputStream.text
+    return process.waitFor() == 0
+  } catch (final Exception ignored) {
+    return false
+  }
+}

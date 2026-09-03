@@ -1,93 +1,182 @@
 # Version Control
 
+An inventory of the versions your infrastructure actually runs.
 
+It answers four questions:
 
-## Getting started
+1. Which version of a component runs in which environment?
+2. Where do the environments differ?
+3. Where is something newer available — and may you even jump there?
+4. When was what changed, and why was something *not* changed?
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+It is an inventory, not a deployment system. It runs no actions on target hosts, it does not manage your
+application dependencies (Renovate and Dependabot do that), and it does not read the deployed versions
+by itself: you enter them, in the same work step in which you upgrade the component.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+> **Status: early.** Everything described here is built, tested and translated.
 
-## Add your files
+## What it looks like
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+The start page is the task list, not the matrix — it answers what needs doing, in a fixed order: out of
+support before merely behind, a check that has been failing for days before a cosmetic warning.
+
+![Task list](docs/images/tasks.jpg)
+
+The matrix is the second view: one row per component, one column per environment, and the newest
+available version at the end. Rows whose environments disagree are marked, a cell that is deliberately
+empty (`–`) is not the same as one nobody has filled in.
+
+![Version matrix](docs/images/matrix.jpg)
+
+A component page carries the source and its version rule, the last check, what may be upgraded to next
+per environment — and what would be a bigger jump than allowed, shown as a hint rather than a task —
+plus the dependencies in both directions, evaluated per environment.
+
+![Component detail](docs/images/component-detail.jpg)
+
+Projects, environments and components are maintained on one page.
+
+![Master data](docs/images/master-data.jpg)
+
+## What it watches
+
+Infrastructure components you maintain by hand — a database, an identity provider, a reverse proxy, a
+monitoring stack, the Docker packages on a host. Sources it can check:
+
+| Source | Example |
+|---|---|
+| Docker Hub | `library/postgres` |
+| GitHub releases | `owner/repository` |
+| APT repository | the Docker packages on Ubuntu — one component, several packages |
+| Manual | anything without a machine readable source; kept by hand, never an error state |
+
+On top of that it tracks end-of-life dates, records every change with a note, backup reference,
+rollback path and downtime, and remembers why an available update was deliberately postponed.
+
+## Running it
+
+```bash
+cp .env.example .env      # fill in at least the database credentials
+docker compose -f deploy/compose.yml up
+```
+
+The dashboard is then on <http://localhost:8081>. It serves the interface and forwards `/api` to the
+backend, so there is a single entry point and the frontend build is environment independent.
+
+**Access control is not part of this application.** It is meant to sit behind a reverse proxy or an
+access gateway that handles authentication. Do not expose it directly.
+
+## Developing
+
+Requires Java 25 and Node 24 — `.vfox.toml` pins the versions.
+
+```bash
+./gradlew :core:build          # backend: compile and test
+./gradlew :core:bootRun        # backend on :8080, actuator on :8090
+./gradlew :core:test --tests "one.epicsoft.vc.util.VcUtilTest"
+
+cd dashboard
+npm ci
+npm start                      # dev server on :4200, /api proxied to localhost:8080
+npm run build
+npm test                       # unit tests, vitest in jsdom
+npm run i18n:verify            # every key used by the interface exists
+```
+
+Unit tests run anywhere. Tests tagged `integration` start a PostgreSQL container through
+Testcontainers and are skipped automatically when no Docker daemon answers, so `./gradlew test` stays
+green on a machine without one.
+
+The dashboard tests run in jsdom through the Angular `unit-test` builder, so they need no browser and
+no display — `npm test` is the whole story, locally and in CI.
+
+The dev server forwards `/api` to `localhost:8080` (`proxy.conf.json`), the same way the dashboard
+container does in a deployment. The interface therefore always calls a relative URL, in development as
+in production, and the backend needs no CORS rule — a rule that would exist only for development and
+would then have to be kept out of production by hand.
+
+### Images
+
+Two images are built from this repository and published to the GitLab Container Registry of the
+project, tagged by branch (`vc-core-main`, `vc-dashboard-develop`, …):
+
+| Image | Base | Contains |
+|---|---|---|
+| `vc-core` | `eclipse-temurin:25-jre-alpine` | the backend as a single jar, non-root, health check on 8090 |
+| `vc-dashboard` | `nginx:alpine` | the built interface, SPA fallback, `/api` forwarded to the backend |
+
+PostgreSQL comes from the official image; `deploy/compose.yml` starts all three. Swap the `image` line
+for the commented `build` block in that file to run local changes.
+
+### Layout
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/epicsoft-networks/version-control.git
-git branch -M main
-git push -uf origin main
+core/          Java 25 / Spring Boot 4 backend, REST under /api/v1
+dashboard/     Angular frontend, served by nginx in its own image
+deploy/        compose file for the local stack
+docs/          documentation
 ```
 
-## Integrate with your tools
+### Conventions
 
-* [Set up project integrations](https://gitlab.com/epicsoft-networks/version-control/-/settings/integrations)
+[`CODE_CONVENTION.md`](CODE_CONVENTION.md) — read it before changing code. [`CONTRIBUTING.md`](CONTRIBUTING.md)
+covers the workflow. Translations are explained in [`docs/i18n.md`](docs/i18n.md).
 
-## Collaborate with your team
+### Configuration
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+Everything is configured through environment variables; see [`.env.example`](.env.example). Values that
+only come from the environment carry the literal `USE_ENV` in `application.yml`, and every consumer
+treats that exactly like a missing value — an unconfigured feature switches itself off instead of
+calling an upstream API with the word `USE_ENV` as its token.
 
-## Test and Deploy
+**Environment variables** — everything the containers need:
 
-Use the built-in continuous integration in GitLab.
+| Variable | Required | Effect |
+|---|---|---|
+| `VC_DATABASE_HOST` / `_PORT` / `_NAME` | yes | where PostgreSQL is; the compose file sets the first two |
+| `VC_DATABASE_USERNAME` / `_PASSWORD` | yes | database credentials |
+| `VC_HTTP_PORT` | no (8081) | the port the dashboard is published on |
+| `VC_IMAGE_TAG` | no (main) | which branch's images the compose file pulls |
+| `VC_GITHUB_TOKEN` | no | raises the GitHub rate limit from 60 to 5.000 requests/hour |
+| `VC_TELEGRAM_BOT_TOKEN` / `VC_TELEGRAM_CHAT_ID` | no | without them the daily summary is not sent |
+| `VC_TOLGEE_URL` / `_PROJECT_ID` / `_API_KEY` | no | build time only, to re-export the translations |
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+**Application settings** — `application.yml`, overridable per environment:
 
-***
+| Setting | Default | Effect |
+|---|---|---|
+| `vc.i18n.default-lang` | en | the language of the interface and of the daily message |
+| `vc.scheduler.enabled` | true | switches every background job off in one place |
+| `vc.scheduler.tick-interval` | 15m | how often the scheduler picks up **one** due component |
+| `vc.check.default-interval` | 48h | how often a component is checked |
+| `vc.check.min-interval` | 48h | hard lower bound, manual checks included |
+| `vc.check.jitter` | 2h | spreads the checks instead of running them in a nightly batch |
+| `vc.check.backoff` | 1h, 4h, 12h | how long a failing source is left alone, per consecutive failure |
+| `vc.check.error-grace-days` | 3 | how long a failing check is tolerated before it becomes a task |
+| `vc.eol.check-interval` | 7d | how often end-of-life dates are refreshed |
+| `vc.eol.warn-months` / `escalate-months` | 6 / 3 | end-of-life thresholds |
+| `vc.notification.daily-time` | 08:00 | when the daily summary is sent |
 
-# Editing this README
+The two ports are fixed inside the images: 8080 serves the API, 8090 serves the actuator and stays
+inside the compose network, which is what the container health check uses.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+### Using a package mirror
 
-## Suggestions for a good README
+The build resolves from Maven Central, the Gradle Plugin Portal and npm. To route it through a mirror,
+set `VC_MAVEN_MIRROR_URL`, `VC_GRADLE_PLUGIN_MIRROR_URL` (optionally `VC_MAVEN_MIRROR_USERNAME` and
+`VC_MAVEN_MIRROR_PASSWORD`) for Gradle, and `VC_NPM_REGISTRY`, `VC_NPM_USERNAME`, `VC_NPM_PASSWORD`
+for npm in CI. Locally, npm reads an `.npmrc` — in your home directory, or in `dashboard/`, where it is
+ignored by git. A mirror that requires authentication needs the credentials in it: an address alone
+carries none, and the mirror answers `401 Unauthorized`.
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+```
+registry=https://mirror.example.com/repository/npm-group/
+//mirror.example.com/repository/npm-group/:username=<user>
+//mirror.example.com/repository/npm-group/:_password=<base64 of the password>
+```
 
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Nothing about a mirror is stored in this repository.
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+[MIT](LICENSE) — Copyright (c) 2026 epicsoft LLC
