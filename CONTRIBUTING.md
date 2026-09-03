@@ -14,8 +14,9 @@ match what is already there.
 Java 25 and Node 24; `.vfox.toml` pins both.
 
 ```bash
-./gradlew :core:build
+./gradlew :core:check                       # compile, tests, and the offline verifications
 cd dashboard && npm ci && npm run build
+cd dashboard && npm test                    # unit tests, vitest in jsdom
 ```
 
 You need no credentials for any of this. Tests that require a database are tagged `integration`. They
@@ -23,6 +24,21 @@ use the database named by `VC_DATABASE_HOST` when that variable is set, and othe
 Testcontainers — so a Docker daemon is enough, and nothing has to be installed. With neither at hand the
 tag is skipped rather than failing, except in CI, where the build stops instead: a pipeline must not go
 green for a test set that never ran.
+
+The dashboard tests need no browser and no display: they run in jsdom through the Angular `unit-test`
+builder. Write them against the rendered component — a test that only calls methods misses everything
+the template does, and the template is where this interface keeps its rules.
+
+## Running it while you work
+
+```bash
+./gradlew :core:bootRun                     # backend on :8080, actuator on :8090
+cd dashboard && npm start                   # dev server on :4200
+```
+
+The dev server forwards `/api` to `localhost:8080` (`proxy.conf.json`), exactly as the dashboard
+container does in a deployment, so the interface always calls a relative URL and the backend needs no
+CORS rule. A database is the only thing you have to supply — the compose file in `deploy/` starts one.
 
 ## Branches and commits
 
@@ -38,11 +54,16 @@ green for a test set that never ran.
 - **No secrets, no internal addresses.** Not in code, not in build files, not as an example value. Every
   credential comes from an environment variable; only `*.example` files are committed.
 - **No user-visible literal.** Every string a person can read goes through a translation key. See
-  [`docs/i18n.md`](docs/i18n.md).
+  [`docs/i18n.md`](docs/i18n.md). Two checks enforce it from the other side —
+  `./gradlew :core:verifyMessageKeys` and `npm run i18n:verify` fail when the code asks for a key the
+  bundles do not have. Both run in the pipeline; a missing key is otherwise invisible, because what
+  reaches the reader is the key itself.
 - **Warnings are silenced by people, not by tools.** Do not add `@SuppressWarnings`, `// noinspection`,
   `eslint-disable`, `@ts-ignore` or `NOSONAR` to make a build quiet. Fix the cause, or leave the warning
   standing and say so in the pull request. Test code is the exception.
-- **Never modify an applied migration.** Add a new one.
+- **Never modify an applied migration.** Add a new one. `V0.1.0__init.sql` is closed: it shipped in a
+  published image, so a database somewhere has applied it, and editing it now stops Flyway on exactly
+  that database.
 - **Pin every version you declare.** Exact versions in `package.json` and `libs.versions.toml`, no
   ranges; commit the resulting `package-lock.json`.
 
