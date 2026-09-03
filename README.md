@@ -77,7 +77,7 @@ Requires Java 25 and Node 24 — `.vfox.toml` pins the versions.
 
 cd dashboard
 npm ci
-npm start                      # dev server on :4200, API on localhost:8080
+npm start                      # dev server on :4200, /api proxied to localhost:8080
 npm run build
 npm test                       # unit tests, vitest in jsdom
 npm run i18n:verify            # every key used by the interface exists
@@ -89,6 +89,11 @@ green on a machine without one.
 
 The dashboard tests run in jsdom through the Angular `unit-test` builder, so they need no browser and
 no display — `npm test` is the whole story, locally and in CI.
+
+The dev server forwards `/api` to `localhost:8080` (`proxy.conf.json`), the same way the dashboard
+container does in a deployment. The interface therefore always calls a relative URL, in development as
+in production, and the backend needs no CORS rule — a rule that would exist only for development and
+would then have to be kept out of production by hand.
 
 ### Images
 
