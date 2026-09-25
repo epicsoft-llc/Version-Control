@@ -33,13 +33,19 @@ workflow:
     - when: always
 
 .gradle-cache: &gradle-cache
-  key: vc-gradle-${CI_COMMIT_REF_SLUG}
+  #### Keyed on the dependency files, not the branch: branches and tags share it, a new one only when versions change.
+  key:
+    files: [ "libs.versions.toml", "gradle/wrapper/gradle-wrapper.properties" ]
+    prefix: vc-gradle
   paths: [ "${GRADLE_USER_HOME}/caches", "${GRADLE_USER_HOME}/wrapper" ]
   policy: pull-push
 
 .node-cache: &node-cache
-  key: vc-node-${CI_COMMIT_REF_SLUG}
-  paths: [ "dashboard/node_modules" ]
+  #### npm's download cache, not node_modules: npm ci deletes node_modules before installing.
+  key:
+    files: [ "dashboard/package-lock.json" ]
+    prefix: vc-node
+  paths: [ "dashboard/.npm" ]
   policy: pull-push
 
 ###############################################################################
@@ -175,7 +181,7 @@ BLD:dashboard:
   image: ${NODE_IMAGE}
   before_script: *npm-setup
   script:
-    - npm ci --no-audit --no-fund
+    - npm ci --cache .npm --prefer-offline --no-audit --no-fund
     - node scripts/i18n-pull.mjs
     #### After the pull, so it judges the state the build actually uses.
     - npm run i18n:verify
@@ -193,7 +199,7 @@ TST:dashboard:
   image: ${NODE_IMAGE}
   before_script: *npm-setup
   script:
-    - npm ci --no-audit --no-fund
+    - npm ci --cache .npm --prefer-offline --no-audit --no-fund
     - npx ng test
   cache:
     <<: *node-cache
