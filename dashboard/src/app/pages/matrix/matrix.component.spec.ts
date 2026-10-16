@@ -31,8 +31,9 @@ describe('MatrixComponent', () => {
   const cells = (): HTMLTableCellElement[] =>
     [...fixture.nativeElement.querySelectorAll('tbody tr:first-child td')] as HTMLTableCellElement[];
 
+  // The copy button carries a title of its own; the state of a cell is told by the rest.
   const titles = (): (string | null)[] => cells().map((cell) => {
-    const holder = cell.querySelector('[title]');
+    const holder = cell.querySelector('[title]:not(.vc-copy)');
     return holder ? holder.getAttribute('title') : null;
   });
 

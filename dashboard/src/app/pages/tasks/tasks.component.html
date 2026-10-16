@@ -41,12 +41,14 @@
               <td>
                 @if (entry.currentVersion) {
                   <span class="text-secondary">{{ entry.currentVersion }}</span>
+                  <vc-copy-value [value]="entry.currentVersion" />
                 }
                 @if (entry.currentVersion && entry.latestVersion) {
                   <i class="bi bi-arrow-right mx-1"></i>
                 }
                 @if (entry.latestVersion) {
                   <span class="fw-semibold">{{ entry.latestVersion }}</span>
+                  <vc-copy-value [value]="entry.latestVersion" />
                 }
               </td>
               <td class="small text-secondary">

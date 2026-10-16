@@ -20,6 +20,7 @@ import {EolStatusRepo} from '../../repositories/api/eol-status.repo';
 import {UpdateCheckRepo} from '../../repositories/api/update-check.repo';
 import {VersionChangeRepo} from '../../repositories/api/version-change.repo';
 import {VersionChangeDialogComponent} from '../../components/version-change-dialog/version-change-dialog.component';
+import {CopyValueComponent} from '../../components/copy-value/copy-value.component';
 import {ProjectSelectionService} from '../../services/project-selection/project-selection.service';
 import {isDefined, nonBlank, unsubscribe} from '../../libs/utils/vc.utils';
 
@@ -48,7 +49,7 @@ export class EnvironmentRow {
   // signals, the strategy has to say what the code assumes.
   changeDetection: ChangeDetectionStrategy.Default,
   selector: 'vc-component-detail',
-  imports: [DatePipe, RouterLink, TranslatePipe],
+  imports: [CopyValueComponent, DatePipe, RouterLink, TranslatePipe],
   templateUrl: './component-detail.component.html'
 })
 export class ComponentDetailComponent implements OnDestroy {

@@ -55,13 +55,14 @@
                       <button type="button"
                               class="btn btn-link btn-sm p-0 text-decoration-none"
                               [title]="('matrix.lastChanged' | translate) + ': ' + (cell.lastChangedAt | date: 'medium')"
-                              (click)="openVersionChange(row.componentId, cell)">{{ cell.currentVersion }}
-                      </button>
+                              (click)="openVersionChange(row.componentId, cell)">{{ cell.currentVersion }}</button>
                     } @else {
                       <button type="button"
                               class="btn btn-link btn-sm p-0 text-decoration-none"
-                              (click)="openVersionChange(row.componentId, cell)">{{ cell.currentVersion }}
-                      </button>
+                              (click)="openVersionChange(row.componentId, cell)">{{ cell.currentVersion }}</button>
+                    }
+                    @if (cell.currentVersion) {
+                      <vc-copy-value [value]="cell.currentVersion" />
                     }
                     @if (cell.movingTag) {
                       <i class="bi bi-exclamation-triangle text-warning ms-1"
@@ -92,6 +93,7 @@
                   @case ('OK') {
                     @if (check.latestVersion) {
                       <span [class.fw-semibold]="updateAvailable(row)">{{ check.latestVersion }}</span>
+                      <vc-copy-value [value]="check.latestVersion" />
                       @if (updateAvailable(row)) {
                         <i class="bi bi-arrow-up-circle text-primary ms-1"
                            [title]="'matrix.updateAvailable' | translate"></i>

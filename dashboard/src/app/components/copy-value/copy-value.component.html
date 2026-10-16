@@ -1,0 +1,13 @@
+<button type="button"
+        class="btn btn-link btn-sm p-0 ms-1 align-baseline vc-copy"
+        [class.link-secondary]="state !== 'failed'"
+        [class.link-danger]="state === 'failed'"
+        [title]="titleKey() | translate"
+        [attr.aria-label]="titleKey() | translate"
+        (click)="copy($event)">
+  <i class="bi"
+     [class.bi-clipboard]="state === 'idle'"
+     [class.bi-check2]="state === 'copied'"
+     [class.bi-exclamation-circle]="state === 'failed'"
+     aria-hidden="true"></i>
+</button>
