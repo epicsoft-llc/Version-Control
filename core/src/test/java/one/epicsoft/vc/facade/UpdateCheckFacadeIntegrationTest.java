@@ -1,8 +1,10 @@
 package one.epicsoft.vc.facade;
 
+import com.sun.net.httpserver.HttpServer;
 import one.epicsoft.vc.AbstractIntegrationTest;
 import one.epicsoft.vc.dto.ComponentDto;
 import one.epicsoft.vc.dto.ComponentEnvironmentRequest;
+import one.epicsoft.vc.dto.ComponentPackageRequest;
 import one.epicsoft.vc.dto.ComponentRequest;
 import one.epicsoft.vc.dto.EnvironmentDto;
 import one.epicsoft.vc.dto.EnvironmentRequest;
@@ -18,6 +20,11 @@ import one.epicsoft.vc.service.ComponentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -114,6 +121,37 @@ class UpdateCheckFacadeIntegrationTest extends AbstractIntegrationTest {
     // A failed check is not an answer. Counting it against the interval would
     // leave the person who just fixed the rule waiting two days to find out.
     assertEquals(CheckState.ERROR, this.updateCheckFacade.checkNow(component.getId()).getCheckState());
+  }
+
+  @Test
+  void storesTheFirstSuccessfulCheckOfAComponentWithPackages() throws IOException {
+    final HttpServer index = this.aptIndex("""
+        Package: docker-ce
+        Version: 5:29.9.0-1~ubuntu.24.04~noble
+
+        Package: docker-ce
+        Version: 5:29.9.1-1~ubuntu.24.04~noble
+
+        Package: containerd.io
+        Version: 2.4.1-2~ubuntu.24.04~noble
+        """);
+    try {
+      final ComponentRequest request =
+        this.request(this.project(), "Docker", SourceType.APT_REPOSITORY,
+                     "http://127.0.0.1:%d/repository".formatted(index.getAddress().getPort()));
+      request.setPackages(List.of(this.aptPackage("docker-ce", 1, true), this.aptPackage("containerd.io", 2, false)));
+      final ComponentDto component = this.componentFacade.create(request);
+
+      final UpdateCheckEntity check = this.updateCheckFacade.check(component.getId(), false);
+
+      // No check is stored yet, so this one inserts its row along with the package
+      // results, and the database accepts that row only with a state.
+      assertEquals(CheckState.OK, check.getCheckState());
+      assertEquals("5:29.9.1-1~ubuntu.24.04~noble", check.getLatestVersion());
+      assertEquals(2, this.updateCheckFacade.findAllByComponent(component.getId()).getFirst().getPackages().size());
+    } finally {
+      index.stop(0);
+    }
   }
 
   @Test
@@ -230,6 +268,28 @@ class UpdateCheckFacadeIntegrationTest extends AbstractIntegrationTest {
       request.setVersionStrategy(VersionStrategy.DEB_VERSION);
     }
     return request;
+  }
+
+  private ComponentPackageRequest aptPackage(final String name, final int sortOrder, final boolean leading) {
+    final ComponentPackageRequest request = new ComponentPackageRequest();
+    request.setName(name);
+    request.setSortOrder(sortOrder);
+    request.setLeadingPackage(leading);
+    return request;
+  }
+
+  /** A repository on the loopback interface keeps the success path as offline as the failures above. */
+  private HttpServer aptIndex(final String packages) throws IOException {
+    final HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+    server.createContext("/repository/dists/noble/stable/binary-amd64/Packages", exchange -> {
+      final byte[] body = packages.getBytes(StandardCharsets.UTF_8);
+      exchange.sendResponseHeaders(200, body.length);
+      try (final OutputStream out = exchange.getResponseBody()) {
+        out.write(body);
+      }
+    });
+    server.start();
+    return server;
   }
 
   private UUID project() {

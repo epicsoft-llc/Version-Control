@@ -1,10 +1,10 @@
 # Changelog
 
 All notable changes to this project are documented here, grouped as in
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). There is no release tag yet, so every entry is headed
-by its date.
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A release is headed by its tag and date,
+`## [1.2.3] - YYYY-MM-DD`; changes from before the first tag are headed by their date alone.
 
-## 2026-10-16
+## [0.1.0] - 2026-10-16
 
 ### Added
 - Mail as a channel for the daily notification, through any SMTP server — `VC_MAIL_HOST`, `_PORT`, `_SECURITY`
@@ -15,11 +15,21 @@ by its date.
 - `deploy/compose.yml` and `.env.example` pass the `VC_MAIL_*` settings to the backend
 - Dependency `spring-boot-starter-mail` for the SMTP channel
 - This changelog; `CONTRIBUTING.md` asks for a line per change a user notices
+- Releases are published to Docker Hub as `epicsoft/version-control` and get a GitHub release with the notes
+  from this changelog. A release `1.2.3` is tagged `vc-core-1.2.3` and `vc-dashboard-1.2.3` and moves `-1.2`,
+  `-1` and `-latest` along, in both registries
+- `VC_IMAGE_REPOSITORY` chooses the registry the compose file pulls from
 
 ### Changed
 - The daily notification goes to every configured channel and counts as reported only once all of them delivered
   it: a failing channel repeats the news on the others the next day instead of losing it for its own readers
 - Gradle wrapper 9.8.1
+- The README reads the same on GitLab, GitHub and Docker Hub: absolute links and images, where the images are
+  and where to report issues
+
+### Fixed
+- The first check of a component with packages (APT repository) ended in a server error instead of storing its
+  result, so such a component never got a successful check
 
 ## 2026-09-03
 

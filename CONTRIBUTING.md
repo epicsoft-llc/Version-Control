@@ -48,6 +48,8 @@ CORS rule. A database is the only thing you have to supply — the compose file 
   `ci:`, `docs:`, `refactor:`, `test:`, `revert:`. Write them in English, in the imperative.
 - Every change a user notices gets a line in [`CHANGELOG.md`](CHANGELOG.md), in the same commit — under
   the version of its release tag, and under the date of the change as long as there is none.
+- A release tag needs its heading in the changelog first, `## [1.2.3]` followed by anything: that section
+  becomes the notes of the GitHub release, and the release job stops when it finds none.
 
 ## The rules that are not style
 
@@ -72,14 +74,20 @@ CORS rule. A database is the only thing you have to supply — the compose file 
 ## CI
 
 The pipeline needs **no configuration at all** to run: every job either works with GitLab's own
-predefined variables or switches itself off. Three groups of variables unlock optional behaviour, and
-each group is all-or-nothing — set every variable in it or none.
+predefined variables or switches itself off. Groups of variables unlock optional behaviour, and each
+group is all-or-nothing — set every variable in it or none.
 
 | Group | Variables | Without them |
 |---|---|---|
 | Translations | `VC_TOLGEE_API_KEY`, `VC_TOLGEE_URL`, `VC_TOLGEE_PROJECT_ID` | the committed translation files are shipped as they are |
 | Vulnerability scan | `VC_DEPCHECK_URL`, `VC_DEPCHECK_USERNAME`, `VC_DEPCHECK_PASSWORD`, `VC_DEPCHECK_RUNNER_TAG`, `VC_DEPCHECK_DRIVER`, `VC_DEPCHECK_DRIVER_JAR` | the job does not run |
 | Package mirror | `VC_MAVEN_MIRROR_URL`, `VC_GRADLE_PLUGIN_MIRROR_URL`, `VC_MAVEN_MIRROR_USERNAME`, `VC_MAVEN_MIRROR_PASSWORD`, `VC_NPM_REGISTRY`, `VC_NPM_USERNAME`, `VC_NPM_PASSWORD` | Maven Central, the Gradle Plugin Portal and npm are used directly |
+| Docker Hub | `DOCKER_HUB_USER`, `DOCKER_HUB_TOKEN` | a release stays in the GitLab registry, and the Docker Hub page keeps its README |
+| GitHub release | `GITHUB_TOKEN` — fine-grained, *Contents* read and write | a release tag gets no GitHub release |
+
+Where a release goes is set in `.gitlab-ci.yml`: `VC_DOCKER_HUB_REPOSITORY` and `VC_GITHUB_REPOSITORY`
+name this project's repositories, and a fork overrides both with CI variables of its own. The code reaches
+GitHub through the GitLab push mirror, so the release job waits until the tag has arrived there.
 
 A freshly added key is translated asynchronously and can take minutes. Pull only once every key has a
 value in the fallback language — otherwise the committed files miss it and the next pipeline fails on a
@@ -87,14 +95,16 @@ check that is doing its job.
 
 Mask every credential. Do **not** mark them *protected* unless the branch is protected too — a protected
 variable is absent on an unprotected branch, and the translation pull would then quietly ship the
-committed files instead of failing.
+committed files instead of failing. The same holds for tags: protected publishing tokens need protected
+release tags (`*.*.*`), or the tag pipeline runs without them and publishes nothing.
 
 **Job logs are readable by anyone** while *Public pipelines* is enabled on a public project. No step may
 print a configuration, a registry address or an environment dump: masking protects only the values of
 masked variables, and file variables are not masked at all. Diagnostics say which path was taken, never
 with which values.
 
-The image jobs need the project's container registry enabled and a runner tagged `image`. The test job
+The image jobs need the project's container registry enabled and a runner tagged `image` that runs
+privileged: they build with Docker in Docker, and so does the README upload to Docker Hub. The test job
 attaches PostgreSQL as a service and points the tests at it through `VC_DATABASE_*`, so it needs no
 Docker of its own.
 

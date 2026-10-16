@@ -5,7 +5,9 @@
 #   docker compose up
 #
 # Swap `image` for the commented `build` block to run local changes.
-# VC_IMAGE_TAG picks the branch the images came from (default: main).
+# VC_IMAGE_REPOSITORY picks the registry (default: GitLab), VC_IMAGE_TAG a release
+# such as 0.1.0 or a branch build, main (default) or develop. Docker Hub carries
+# releases only.
 
 name: version-control
 
@@ -29,7 +31,7 @@ services:
       retries: 10
 
   core:
-    image: registry.gitlab.com/epicsoft-networks/version-control:vc-core-${VC_IMAGE_TAG:-main}
+    image: ${VC_IMAGE_REPOSITORY:-registry.gitlab.com/epicsoft-networks/version-control}:vc-core-${VC_IMAGE_TAG:-main}
     # build:
     #   context: ../core
     #   args:
@@ -68,7 +70,7 @@ services:
           memory: 1024M
 
   dashboard:
-    image: registry.gitlab.com/epicsoft-networks/version-control:vc-dashboard-${VC_IMAGE_TAG:-main}
+    image: ${VC_IMAGE_REPOSITORY:-registry.gitlab.com/epicsoft-networks/version-control}:vc-dashboard-${VC_IMAGE_TAG:-main}
     # build:
     #   context: ../dashboard
     restart: unless-stopped

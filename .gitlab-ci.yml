@@ -13,6 +13,7 @@ stages:
   - dependency
   - security
   - artifact
+  - release
 
 variables:
   VERSION: ${CI_COMMIT_REF_NAME}
@@ -23,7 +24,12 @@ variables:
   JDK_IMAGE: eclipse-temurin:25-jdk
   JRE_IMAGE_VERSION: 25-jre-alpine
   NODE_IMAGE: node:24-alpine
+  ALPINE_IMAGE: alpine:3.24
   BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
+  #### Where a release goes besides the GitLab registry. The jobs that publish
+  #### there run only where the credentials exist, so a fork builds without them.
+  VC_DOCKER_HUB_REPOSITORY: epicsoft/version-control
+  VC_GITHUB_REPOSITORY: epicsoft-llc/version-control
 
 #### No pipeline for merge requests — the branch pipeline is the verification.
 workflow:
@@ -208,7 +214,9 @@ TST:dashboard:
   retry: 1
 
 ###############################################################################
-#### Images
+#### Images — a branch build goes to the GitLab registry only. A release tag
+#### goes there and, with DOCKER_HUB_USER and DOCKER_HUB_TOKEN, to Docker Hub,
+#### each time as <version>, <major>.<minor>, <major> and latest.
 ###############################################################################
 .image: &image
   stage: artifact
@@ -216,9 +224,29 @@ TST:dashboard:
   services:
     - docker:dind
   before_script:
-    - docker login -u gitlab-ci-token -p ${CI_JOB_TOKEN} ${CI_REGISTRY}
+    #### Over stdin: '-p' would put the token in the process list of the runner.
+    - echo "${CI_JOB_TOKEN}" | docker login -u gitlab-ci-token --password-stdin "${CI_REGISTRY}"
+    - |
+      #### Job logs are public: nothing here may print a value.
+      publish() {
+        docker push "${CI_REGISTRY_IMAGE}:${MODULE}-${VERSION}"
+        if [ -n "${CI_COMMIT_TAG:-}" ]; then
+          targets="${CI_REGISTRY_IMAGE}"
+          if [ -n "${DOCKER_HUB_USER:-}" ] && [ -n "${DOCKER_HUB_TOKEN:-}" ]; then
+            echo "${DOCKER_HUB_TOKEN}" | docker login -u "${DOCKER_HUB_USER}" --password-stdin > /dev/null
+            targets="${targets} ${VC_DOCKER_HUB_REPOSITORY}"
+          fi
+          for target in ${targets}; do
+            for tag in "${VERSION}" "$(echo "${VERSION}" | cut -d. -f1,2)" "${VERSION%%.*}" latest; do
+              docker tag "${CI_REGISTRY_IMAGE}:${MODULE}-${VERSION}" "${target}:${MODULE}-${tag}"
+              docker push "${target}:${MODULE}-${tag}"
+            done
+          done
+        fi
+      }
   after_script:
     - docker logout ${CI_REGISTRY}
+    - docker logout
     - rm -f /root/.docker/config.json
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
@@ -230,26 +258,102 @@ TST:dashboard:
 IMG:core:
   <<: *image
   variables:
-    VC_IMAGE: ${CI_REGISTRY_IMAGE}:vc-core-${VERSION}
+    MODULE: vc-core
   script:
     #### Excludes the plain jar — it would start and die with "no main manifest".
     - JAR_FILE=$(ls core/build/libs/vc-core-*.jar | grep -v -- '-plain' | head -1)
-    - echo "Building ${VC_IMAGE} from ${JAR_FILE}"
-    - docker build --pull -t ${VC_IMAGE} core
+    - echo "Building ${MODULE}-${VERSION} from ${JAR_FILE}"
+    - docker build --pull -t ${CI_REGISTRY_IMAGE}:${MODULE}-${VERSION} core
       --build-arg IMAGE_VERSION=${JRE_IMAGE_VERSION}
       --build-arg APP_VERSION=${VERSION}
       --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
       --build-arg JAR_FILE=$(basename ${JAR_FILE} | sed 's|^|build/libs/|')
-    - docker push ${VC_IMAGE}
+    - publish
   needs: [ "BLD:core" ]
 
 IMG:dashboard:
   <<: *image
   variables:
-    VC_IMAGE: ${CI_REGISTRY_IMAGE}:vc-dashboard-${VERSION}
+    MODULE: vc-dashboard
   script:
-    - docker build --pull -t ${VC_IMAGE} dashboard
+    - docker build --pull -t ${CI_REGISTRY_IMAGE}:${MODULE}-${VERSION} dashboard
       --build-arg APP_VERSION=${VERSION}
       --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-    - docker push ${VC_IMAGE}
+    - publish
   needs: [ "BLD:dashboard" ]
+
+###############################################################################
+#### Release — on a version tag, each job only where its credentials exist
+###############################################################################
+#### The Docker Hub page shows README.md, so it describes the release it came with.
+RLS:readme:
+  stage: release
+  image: docker:dind
+  services:
+    - docker:dind
+  script:
+    #### Docker Hub takes at most 25,000 characters - counted here in bytes, which is stricter.
+    - |
+      size=$(wc -c < README.md)
+      if [ "$size" -gt 25000 ]; then
+        echo "README.md has $size bytes, Docker Hub takes 25000"
+        exit 1
+      fi
+    #### '-e NAME' without a value takes it from the environment; with a value the token would be in the process list.
+    - DOCKERHUB_PASSWORD="${DOCKER_HUB_TOKEN}" docker run --rm -v "$PWD:/workspace"
+      -e DOCKERHUB_USERNAME="${DOCKER_HUB_USER}"
+      -e DOCKERHUB_PASSWORD
+      -e DOCKERHUB_REPOSITORY="${VC_DOCKER_HUB_REPOSITORY}"
+      -e SHORT_DESCRIPTION="Inventory of the versions your infrastructure runs, with update and end-of-life checks"
+      -e README_FILEPATH=/workspace/README.md
+      peterevans/dockerhub-description:4
+  needs: [ "IMG:core", "IMG:dashboard" ]
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^\d+\.\d+\.\d+(?:\.\d+)?$/ && $DOCKER_HUB_USER && $DOCKER_HUB_TOKEN'
+  tags: [ "image" ]
+  retry: 1
+
+#### The code reaches GitHub through the GitLab push mirror, so the job waits for the tag there.
+#### GITHUB_TOKEN: fine-grained, Contents read and write. Protected, so the tag has to be protected too.
+RLS:github:
+  stage: release
+  image: ${ALPINE_IMAGE}
+  script:
+    - apk add --no-cache curl jq > /dev/null
+    - |
+      api="https://api.github.com/repos/${VC_GITHUB_REPOSITORY}"
+      #### curl reads the header from a file, so the token stays out of the process list.
+      auth_file=$(mktemp)
+      printf 'Authorization: Bearer %s\n' "${GITHUB_TOKEN}" > "$auth_file"
+      auth="@$auth_file"
+      #### Ends at the next heading of any kind: entries from before a tag sit under a plain date.
+      notes=$(awk -v head="## [${CI_COMMIT_TAG}]" 'index($0, head) == 1 { found = 1; next } /^## / { found = 0 } found' CHANGELOG.md)
+      if [ -z "$notes" ]; then
+        echo "CHANGELOG.md has no entry for ${CI_COMMIT_TAG}"
+        exit 1
+      fi
+      images="- \`${CI_REGISTRY_IMAGE}:vc-core-${CI_COMMIT_TAG}\`, \`:vc-dashboard-${CI_COMMIT_TAG}\` (GitLab)"
+      if [ -n "${DOCKER_HUB_USER:-}" ] && [ -n "${DOCKER_HUB_TOKEN:-}" ]; then
+        images="- \`${VC_DOCKER_HUB_REPOSITORY}:vc-core-${CI_COMMIT_TAG}\`, \`:vc-dashboard-${CI_COMMIT_TAG}\` (Docker Hub)
+      ${images}"
+      fi
+      body=$(printf '%s\n\n### Images\n\n%s\n' "$notes" "$images")
+      if curl -sf -H "$auth" "$api/releases/tags/${CI_COMMIT_TAG}" > /dev/null; then
+        echo "Release ${CI_COMMIT_TAG} already exists on GitHub"
+        exit 0
+      fi
+      tries=0
+      until curl -sf -H "$auth" "$api/git/ref/tags/${CI_COMMIT_TAG}" > /dev/null; do
+        tries=$((tries + 1))
+        if [ "$tries" -ge 60 ]; then
+          echo "Tag ${CI_COMMIT_TAG} did not reach GitHub within 10 minutes - check the push mirror"
+          exit 1
+        fi
+        sleep 10
+      done
+      jq -n --arg tag "${CI_COMMIT_TAG}" --arg body "$body" '{tag_name: $tag, name: $tag, body: $body}' \
+        | curl -sS --fail-with-body -X POST -H "$auth" -H "Accept: application/vnd.github+json" "$api/releases" -d @- > /dev/null
+      echo "Release ${CI_COMMIT_TAG} created on GitHub"
+  needs: [ "IMG:core", "IMG:dashboard" ]
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^\d+\.\d+\.\d+(?:\.\d+)?$/ && $GITHUB_TOKEN'
