@@ -12,6 +12,7 @@ import {MatrixCellDto, MatrixDto, MatrixRowDto} from '../../repositories/dto/mat
 import {MatrixCellState} from '../../repositories/dto/enums.dto';
 import {ProjectDto} from '../../repositories/dto/project.dto';
 import {UpdateCheckDto} from '../../repositories/dto/update-check.dto';
+import {ProjectSelectionService} from '../../services/project-selection/project-selection.service';
 import {MatrixComponent} from './matrix.component';
 
 /**
@@ -25,6 +26,7 @@ describe('MatrixComponent', () => {
   let fixture: ComponentFixture<MatrixComponent>;
   let getMatrix: ReturnType<typeof vi.fn>;
   let findChecks: ReturnType<typeof vi.fn>;
+  let findProjects: ReturnType<typeof vi.fn>;
 
   const cells = (): HTMLTableCellElement[] =>
     [...fixture.nativeElement.querySelectorAll('tbody tr:first-child td')] as HTMLTableCellElement[];
@@ -66,6 +68,9 @@ describe('MatrixComponent', () => {
   beforeEach(async () => {
     getMatrix = vi.fn();
     findChecks = vi.fn();
+    findProjects = vi.fn().mockReturnValue(of([new ProjectDto({id: 'project-1', name: 'Platform'})]));
+    // The chosen project outlives a page; without this one test would choose for the next.
+    localStorage.clear();
 
     await TestBed.configureTestingModule({
       imports: [MatrixComponent],
@@ -73,10 +78,7 @@ describe('MatrixComponent', () => {
         provideZoneChangeDetection({eventCoalescing: true}),
         provideRouter([]),
         provideTranslateService({fallbackLang: 'en'}),
-        {
-          provide: ProjectRepo,
-          useValue: {findAll: () => of([new ProjectDto({id: 'project-1', name: 'Platform'})]), getMatrix}
-        },
+        {provide: ProjectRepo, useValue: {findAll: findProjects, getMatrix}},
         {provide: UpdateCheckRepo, useValue: {findAllByProject: findChecks}}
       ]
     }).compileComponents();
@@ -106,6 +108,18 @@ describe('MatrixComponent', () => {
     expect(unknown.querySelector('button')).not.toBeNull();
     expect(inactive.querySelector('button')).toBeNull();
     expect(titles().slice(0, 4)).toEqual([null, 'Version unknown', 'Not used here', 'Not recorded']);
+  });
+
+  it('opens on the project chosen last, not on the first one', async () => {
+    findProjects.mockReturnValue(of([new ProjectDto({id: 'project-1', name: 'Platform'}),
+                                     new ProjectDto({id: 'project-2', name: 'Infra'})]));
+    // What a reload or the way back from a component page leaves behind.
+    TestBed.inject(ProjectSelectionService).select('project-2');
+
+    await render(matrix(cell('production', 'RECORDED', {currentVersion: '17.2'})));
+
+    expect(getMatrix).toHaveBeenCalledWith('project-2');
+    expect(getMatrix).not.toHaveBeenCalledWith('project-1');
   });
 
   it('marks a moving tag where it is deployed', async () => {

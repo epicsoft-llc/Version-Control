@@ -11,6 +11,7 @@ import {TaskEntryDto, TaskListDto, TaskSection} from '../../repositories/dto/tas
 import {ProjectRepo} from '../../repositories/api/project.repo';
 import {TaskRepo} from '../../repositories/api/task.repo';
 import {DecisionDialogComponent} from '../../components/decision-dialog/decision-dialog.component';
+import {ProjectSelectionService} from '../../services/project-selection/project-selection.service';
 import {isDefined, unsubscribe} from '../../libs/utils/vc.utils';
 
 /**
@@ -37,6 +38,7 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   private readonly projectRepo: ProjectRepo = inject(ProjectRepo);
   private readonly taskRepo: TaskRepo = inject(TaskRepo);
+  private readonly projectSelection: ProjectSelectionService = inject(ProjectSelectionService);
   private readonly modal: NgbModal = inject(NgbModal);
   private readonly subs: Subscription[] = [];
 
@@ -69,8 +71,9 @@ export class TasksComponent implements OnInit, OnDestroy {
       next: (projects) => {
         this.projects = projects;
         this.loading = false;
-        if (projects.length > 0) {
-          this.selectProject(projects[0].id);
+        const target = this.projectSelection.pick(projects);
+        if (isDefined(target)) {
+          this.selectProject(target);
         }
       },
       error: (error: HttpErrorResponse) => {
@@ -85,6 +88,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   }
 
   protected selectProject(projectId: string): void {
+    this.projectSelection.select(projectId);
     this.selection.next(projectId);
   }
 

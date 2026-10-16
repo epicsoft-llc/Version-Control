@@ -15,6 +15,7 @@ import {ProjectRepo} from '../../repositories/api/project.repo';
 import {EnvironmentRepo} from '../../repositories/api/environment.repo';
 import {ComponentRepo} from '../../repositories/api/component.repo';
 import {UpdateCheckRepo} from '../../repositories/api/update-check.repo';
+import {ProjectSelectionService} from '../../services/project-selection/project-selection.service';
 import {isDefined, nonBlank, notDefined, unsubscribe} from '../../libs/utils/vc.utils';
 
 /** One row of the dependency editor: what is needed, in which range, and why. */
@@ -76,6 +77,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
   private readonly environmentRepo: EnvironmentRepo = inject(EnvironmentRepo);
   private readonly componentRepo: ComponentRepo = inject(ComponentRepo);
   private readonly updateCheckRepo: UpdateCheckRepo = inject(UpdateCheckRepo);
+  private readonly projectSelection: ProjectSelectionService = inject(ProjectSelectionService);
   private readonly translate: TranslateService = inject(TranslateService);
   private readonly subs: Subscription[] = [];
 
@@ -139,6 +141,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
   }
 
   protected selectProject(projectId: string): void {
+    this.projectSelection.select(projectId);
     this.selection.next(projectId);
   }
 
@@ -455,7 +458,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
   private loadProjects(selectId?: string): void {
     this.subs.push(this.projectRepo.findAll().subscribe((projects) => {
       this.projects = projects;
-      const target = selectId ?? this.selectedProjectId ?? projects[0]?.id;
+      const target = selectId ?? this.selectedProjectId ?? this.projectSelection.pick(projects);
       if (isDefined(target)) {
         this.selectProject(target);
       }

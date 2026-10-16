@@ -14,6 +14,7 @@ import {ComponentRepo} from '../../repositories/api/component.repo';
 import {ComponentEnvironmentRepo} from '../../repositories/api/component-environment.repo';
 import {UpdateCheckRepo} from '../../repositories/api/update-check.repo';
 import {VersionChangeDialogComponent} from '../../components/version-change-dialog/version-change-dialog.component';
+import {ProjectSelectionService} from '../../services/project-selection/project-selection.service';
 import {isDefined, notDefined, unsubscribe} from '../../libs/utils/vc.utils';
 
 /**
@@ -42,6 +43,7 @@ export class MatrixComponent implements OnInit, OnDestroy {
   private readonly componentRepo: ComponentRepo = inject(ComponentRepo);
   private readonly componentEnvironmentRepo: ComponentEnvironmentRepo = inject(ComponentEnvironmentRepo);
   private readonly updateCheckRepo: UpdateCheckRepo = inject(UpdateCheckRepo);
+  private readonly projectSelection: ProjectSelectionService = inject(ProjectSelectionService);
   private readonly modal: NgbModal = inject(NgbModal);
   private readonly subs: Subscription[] = [];
 
@@ -88,8 +90,9 @@ export class MatrixComponent implements OnInit, OnDestroy {
       next: (projects) => {
         this.projects = projects;
         this.loading = false;
-        if (projects.length > 0) {
-          this.selectProject(projects[0].id);
+        const target = this.projectSelection.pick(projects);
+        if (isDefined(target)) {
+          this.selectProject(target);
         }
       },
       error: (error: HttpErrorResponse) => {
@@ -104,6 +107,7 @@ export class MatrixComponent implements OnInit, OnDestroy {
   }
 
   protected selectProject(projectId: string): void {
+    this.projectSelection.select(projectId);
     this.selection.next(projectId);
   }
 
