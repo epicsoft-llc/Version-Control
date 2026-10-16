@@ -11,3 +11,14 @@
   white-space: nowrap;
   vertical-align: middle;
 }
+
+/* Copy buttons behind version numbers stay quiet until pointed at; touch screens still see them. */
+.vc-copy {
+  line-height: 1;
+  opacity: 0.4;
+}
+
+.vc-copy:hover,
+.vc-copy:focus-visible {
+  opacity: 1;
+}

@@ -14,6 +14,7 @@ import {ComponentRepo} from '../../repositories/api/component.repo';
 import {ComponentEnvironmentRepo} from '../../repositories/api/component-environment.repo';
 import {UpdateCheckRepo} from '../../repositories/api/update-check.repo';
 import {VersionChangeDialogComponent} from '../../components/version-change-dialog/version-change-dialog.component';
+import {CopyValueComponent} from '../../components/copy-value/copy-value.component';
 import {ProjectSelectionService} from '../../services/project-selection/project-selection.service';
 import {isDefined, notDefined, unsubscribe} from '../../libs/utils/vc.utils';
 
@@ -34,7 +35,7 @@ import {isDefined, notDefined, unsubscribe} from '../../libs/utils/vc.utils';
   // signals, the strategy has to say what the code assumes.
   changeDetection: ChangeDetectionStrategy.Default,
   selector: 'vc-matrix',
-  imports: [DatePipe, FormsModule, RouterLink, TranslatePipe],
+  imports: [CopyValueComponent, DatePipe, FormsModule, RouterLink, TranslatePipe],
   templateUrl: './matrix.component.html'
 })
 export class MatrixComponent implements OnInit, OnDestroy {

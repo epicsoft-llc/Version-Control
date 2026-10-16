@@ -73,6 +73,9 @@
         <dt class="col-sm-3">{{ 'check.field.latestVersion' | translate }}</dt>
         <dd class="col-sm-9">
           {{ check.latestVersion || dash }}
+          @if (check.latestVersion) {
+            <vc-copy-value [value]="check.latestVersion" />
+          }
           @if (check.latestReleasedAt) {
             <span class="text-secondary ms-1">({{ check.latestReleasedAt | date: 'mediumDate' }})</span>
           }
@@ -82,7 +85,12 @@
           <dt class="col-sm-3">{{ 'component.field.packages' | translate }}</dt>
           <dd class="col-sm-9">
             @for (entry of check.packages; track entry.packageName) {
-              <div><code>{{ entry.packageName }}</code> {{ entry.latestVersion }}</div>
+              <div>
+                <code>{{ entry.packageName }}</code> {{ entry.latestVersion }}
+                @if (entry.latestVersion) {
+                  <vc-copy-value [value]="entry.latestVersion" />
+                }
+              </div>
             }
           </dd>
         }
@@ -150,10 +158,16 @@
           @for (proposal of proposals; track proposal.environmentId) {
             <tr>
               <th scope="row" class="fw-normal">{{ proposal.environmentName }}</th>
-              <td class="text-secondary">{{ proposal.currentVersion || dash }}</td>
+              <td class="text-secondary">
+                {{ proposal.currentVersion || dash }}
+                @if (proposal.currentVersion) {
+                  <vc-copy-value [value]="proposal.currentVersion" />
+                }
+              </td>
               <td>
                 @if (proposal.target) {
                   <span class="fw-semibold">{{ proposal.target }}</span>
+                  <vc-copy-value [value]="proposal.target" />
                   @if (proposal.needsMaintenanceWindow) {
                     <i class="bi bi-clock-history text-secondary ms-1"
                        [title]="'proposal.maintenanceWindow' | translate"></i>
@@ -288,6 +302,7 @@
               @if (row.cell && row.cell.active) {
                 @if (row.cell.currentVersion) {
                   {{ row.cell.currentVersion }}
+                  <vc-copy-value [value]="row.cell.currentVersion" />
                   @if (row.cell.movingTag) {
                     <i class="bi bi-exclamation-triangle text-warning ms-1"
                        [title]="'matrix.movingTag' | translate"></i>
@@ -347,9 +362,13 @@
                 <td>
                   @if (entry.fromVersion) {
                     <span class="text-secondary">{{ entry.fromVersion }}</span>
+                    <vc-copy-value [value]="entry.fromVersion" />
                     <i class="bi bi-arrow-right mx-1"></i>
                   }
                   {{ entry.toVersion }}
+                  @if (entry.toVersion) {
+                    <vc-copy-value [value]="entry.toVersion" />
+                  }
                 </td>
                 <td>
                   @if (entry.backupTaken) {
