@@ -4,6 +4,13 @@ All notable changes to this project are documented here, grouped as in
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A release is headed by its tag and date,
 `## [1.2.3] - YYYY-MM-DD`; changes from before the first tag are headed by their date alone.
 
+## [0.1.1] - 2026-10-16
+
+### Fixed
+- The matrix, the task list and the master data keep the project you chose — after a reload and on the way back
+  from a component page, instead of starting on the first project again. A component page switches to its own
+  project, so a link straight to it leads back into the right matrix
+
 ## [0.1.0] - 2026-10-16
 
 ### Added

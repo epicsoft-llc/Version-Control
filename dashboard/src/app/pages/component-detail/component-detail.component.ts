@@ -20,6 +20,7 @@ import {EolStatusRepo} from '../../repositories/api/eol-status.repo';
 import {UpdateCheckRepo} from '../../repositories/api/update-check.repo';
 import {VersionChangeRepo} from '../../repositories/api/version-change.repo';
 import {VersionChangeDialogComponent} from '../../components/version-change-dialog/version-change-dialog.component';
+import {ProjectSelectionService} from '../../services/project-selection/project-selection.service';
 import {isDefined, nonBlank, unsubscribe} from '../../libs/utils/vc.utils';
 
 /** One environment of this component, with whatever is known about it. */
@@ -58,6 +59,7 @@ export class ComponentDetailComponent implements OnDestroy {
   private readonly versionChangeRepo: VersionChangeRepo = inject(VersionChangeRepo);
   private readonly updateCheckRepo: UpdateCheckRepo = inject(UpdateCheckRepo);
   private readonly eolStatusRepo: EolStatusRepo = inject(EolStatusRepo);
+  private readonly projectSelection: ProjectSelectionService = inject(ProjectSelectionService);
   private readonly modal: NgbModal = inject(NgbModal);
   private readonly subs: Subscription[] = [];
 
@@ -198,6 +200,8 @@ export class ComponentDetailComponent implements OnDestroy {
 
   private loadDetails(component: ComponentDto): void {
     this.component = component;
+    // The way back to the matrix leads into this component's project, after a deep link too.
+    this.projectSelection.select(component.projectId);
     this.subs.push(forkJoin({
       environments: this.environmentRepo.findAllByProject(component.projectId),
       cells: this.componentEnvironmentRepo.findAllByComponent(component.id),
