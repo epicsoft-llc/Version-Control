@@ -46,6 +46,8 @@ CORS rule. A database is the only thing you have to supply — the compose file 
 - Tags are plain versions — `1.2.3`, no leading `v`.
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`,
   `ci:`, `docs:`, `refactor:`, `test:`, `revert:`. Write them in English, in the imperative.
+- Every change a user notices gets a line in [`CHANGELOG.md`](CHANGELOG.md), in the same commit — under
+  the version of its release tag, and under the date of the change as long as there is none.
 
 ## The rules that are not style
 

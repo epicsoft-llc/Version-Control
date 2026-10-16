@@ -3,7 +3,9 @@ package one.epicsoft.vc.facade;
 import jakarta.annotation.Nonnull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import one.epicsoft.vc.adapter.TelegramClient;
+import one.epicsoft.vc.adapter.NotificationChannel;
+import one.epicsoft.vc.data.NotificationDraft;
+import one.epicsoft.vc.data.NotificationMessage;
 import one.epicsoft.vc.dto.DependencyCheckDto;
 import one.epicsoft.vc.dto.ProjectDto;
 import one.epicsoft.vc.dto.TaskEntryDto;
@@ -59,7 +61,7 @@ public class NotificationFacade {
   private final TaskListFacade taskListFacade;
   private final NotificationEntryService notificationEntryService;
   private final TranslationService translationService;
-  private final TelegramClient telegramClient;
+  private final List<NotificationChannel> notificationChannels;
 
   /**
    * What is new across every project, and the keys that say so.
@@ -73,7 +75,7 @@ public class NotificationFacade {
   @Nonnull
   @Transactional(rollbackFor = Throwable.class)
   public NotificationDraft collect() {
-    if (!this.telegramClient.isConfiguredForSending()) {
+    if (this.notificationChannels.stream().noneMatch(NotificationChannel::isConfiguredForSending)) {
       // Nobody configured a channel, so nobody asked for notifications.
       return NotificationDraft.empty();
     }
@@ -94,7 +96,7 @@ public class NotificationFacade {
       log.debug("Nothing new to report");
       return NotificationDraft.empty();
     }
-    return new NotificationDraft(this.translationService.get("notification.title") + "\n\n" + message,
+    return new NotificationDraft(new NotificationMessage(this.translationService.get("notification.title"), message.toString()),
                                  keysByProject);
   }
 
@@ -186,23 +188,5 @@ public class NotificationFacade {
 
   /** The lines of one project, and the keys to remember once they have gone out. */
   private record ProjectPart(@Nonnull List<String> lines, @Nonnull List<String> keys) {
-  }
-
-  /**
-   * A message waiting to be sent, and what to write down afterwards.
-   *
-   * @param text         empty when there is nothing to say
-   * @param keysByProject what was reported, per project
-   */
-  public record NotificationDraft(@Nonnull String text, @Nonnull Map<UUID, List<String>> keysByProject) {
-
-    @Nonnull
-    public static NotificationDraft empty() {
-      return new NotificationDraft("", Map.of());
-    }
-
-    public boolean isEmpty() {
-      return this.text.isBlank();
-    }
   }
 }

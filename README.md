@@ -55,6 +55,9 @@ monitoring stack, the Docker packages on a host. Sources it can check:
 On top of that it tracks end-of-life dates, records every change with a note, backup reference,
 rollback path and downtime, and remembers why an available update was deliberately postponed.
 
+Once a day it reports what is new — to a Telegram chat, by mail through any SMTP server, or both,
+whichever is configured. On a day without news it sends nothing.
+
 ## Running it
 
 ```bash
@@ -140,7 +143,10 @@ calling an upstream API with the word `USE_ENV` as its token.
 | `VC_HTTP_PORT` | no (8081) | the port the dashboard is published on |
 | `VC_IMAGE_TAG` | no (main) | which branch's images the compose file pulls |
 | `VC_GITHUB_TOKEN` | no | raises the GitHub rate limit from 60 to 5.000 requests/hour |
-| `VC_TELEGRAM_BOT_TOKEN` / `VC_TELEGRAM_CHAT_ID` | no | without them the daily summary is not sent |
+| `VC_TELEGRAM_BOT_TOKEN` / `VC_TELEGRAM_CHAT_ID` | no | the daily summary to a Telegram chat; without them nothing goes there |
+| `VC_MAIL_HOST` / `_PORT` / `_SECURITY` | no | the daily summary by mail, through any SMTP server. `_SECURITY` is `starttls` (default, port 587), `tls` (465) or `none` (25, login in clear text); `_PORT` only for a different port |
+| `VC_MAIL_USERNAME` / `_PASSWORD` | no | the login at the mail server; without a username none is attempted |
+| `VC_MAIL_FROM` / `VC_MAIL_TO` | no | the sender (`Version Control <vc@example.com>` works) and comma separated recipients; without host, sender and recipient no mail is sent |
 | `VC_TOLGEE_URL` / `_PROJECT_ID` / `_API_KEY` | no | build time only, to re-export the translations |
 
 **Application settings** — `application.yml`, overridable per environment:

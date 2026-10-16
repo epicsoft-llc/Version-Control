@@ -3,6 +3,8 @@ package one.epicsoft.vc.adapter;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
+import one.epicsoft.vc.data.NotificationMessage;
+import one.epicsoft.vc.enums.ChannelType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -14,10 +16,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static java.util.Objects.nonNull;
 import static one.epicsoft.vc.util.VcUtil.isConfigured;
 
 /**
- * Sends the daily notification, where one is configured.
+ * Sends the daily notification to a Telegram chat.
  *
  * <p>Without a token the feature is off and stays quiet about it. It is not an
  * error state: somebody who did not set a token did not want notifications, and
@@ -30,7 +33,7 @@ import static one.epicsoft.vc.util.VcUtil.isConfigured;
  */
 @Slf4j
 @Component
-public class TelegramClient {
+public class TelegramClient implements NotificationChannel {
 
   private static final String URL = "https://api.telegram.org/bot%s/sendMessage";
 
@@ -65,24 +68,32 @@ public class TelegramClient {
     this.restClient = RestClient.builder().requestFactory(factory).build();
   }
 
-  /** True when a token and a chat are configured; false switches the job off. */
+  @Nonnull
+  @Override
+  public ChannelType channelType() {
+    return ChannelType.TELEGRAM;
+  }
+
+  /** True when a token and a chat are configured. */
+  @Override
   public boolean isConfiguredForSending() {
-    return this.token != null && this.chatId != null;
+    return nonNull(this.token) && nonNull(this.chatId);
   }
 
   /**
-   * Sends the text, split into as many messages as the limit requires.
+   * Sends title and lines as one text, split into as many messages as the limit
+   * requires.
    *
    * @throws SourceException when a part could not be delivered; the message of
    *                         that exception never carries anything from the
    *                         client, because that would carry the token
    */
-  public void send(@Nonnull final String text) {
-    if (!this.isConfiguredForSending()) {
-      return;
-    }
-    for (final String part : split(text)) {
-      this.sendOne(part);
+  @Override
+  public void send(@Nonnull final NotificationMessage message) {
+    if (this.isConfiguredForSending()) {
+      for (final String part : split("%s\n\n%s".formatted(message.title(), message.body()))) {
+        this.sendOne(part);
+      }
     }
   }
 

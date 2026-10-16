@@ -1,8 +1,10 @@
 package one.epicsoft.vc.facade;
 
 import one.epicsoft.vc.AbstractIntegrationTest;
+import one.epicsoft.vc.adapter.NotificationChannel;
 import one.epicsoft.vc.adapter.SourceException;
 import one.epicsoft.vc.adapter.TelegramClient;
+import one.epicsoft.vc.data.NotificationMessage;
 import one.epicsoft.vc.dto.ComponentDependencyRequest;
 import one.epicsoft.vc.dto.ComponentDto;
 import one.epicsoft.vc.dto.ComponentEnvironmentRequest;
@@ -28,9 +30,10 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -77,8 +80,8 @@ class NotificationFacadeIntegrationTest extends AbstractIntegrationTest {
   @BeforeEach
   void configureChannel() {
     when(this.telegramClient.isConfiguredForSending()).thenReturn(true);
-    doNothing().when(this.telegramClient).send(anyString());
-    this.notificationJob = new NotificationJob(this.notificationFacade, this.telegramClient);
+    doNothing().when(this.telegramClient).send(any(NotificationMessage.class));
+    this.notificationJob = new NotificationJob(this.notificationFacade, List.of(this.telegramClient));
   }
 
   @Test
@@ -92,9 +95,9 @@ class NotificationFacadeIntegrationTest extends AbstractIntegrationTest {
 
     // Sent once, and the second morning has nothing to add: the same twelve
     // entries every day are read for a week and ignored after that.
-    final ArgumentCaptor<String> sent = ArgumentCaptor.forClass(String.class);
+    final ArgumentCaptor<NotificationMessage> sent = ArgumentCaptor.forClass(NotificationMessage.class);
     verify(this.telegramClient).send(sent.capture());
-    assertTrue(sent.getValue().contains(component.getName()));
+    assertTrue(sent.getValue().body().contains(component.getName()));
   }
 
   @Test
@@ -104,7 +107,7 @@ class NotificationFacadeIntegrationTest extends AbstractIntegrationTest {
     this.notificationJob.sendDailyNotification();
 
     // An empty notification teaches people not to look.
-    verify(this.telegramClient, never()).send(anyString());
+    verify(this.telegramClient, never()).send(any(NotificationMessage.class));
   }
 
   @Test
@@ -121,7 +124,7 @@ class NotificationFacadeIntegrationTest extends AbstractIntegrationTest {
     this.recordCheck(component, "17.6");
     this.notificationJob.sendDailyNotification();
 
-    verify(this.telegramClient, times(2)).send(anyString());
+    verify(this.telegramClient, times(2)).send(any(NotificationMessage.class));
   }
 
   @Test
@@ -135,7 +138,7 @@ class NotificationFacadeIntegrationTest extends AbstractIntegrationTest {
 
     // Nobody configured a channel, so nobody asked for notifications — that is a
     // decision, not a fault, and it is not worth a complaint every morning.
-    verify(this.telegramClient, never()).send(anyString());
+    verify(this.telegramClient, never()).send(any(NotificationMessage.class));
   }
 
   @Test
@@ -143,16 +146,36 @@ class NotificationFacadeIntegrationTest extends AbstractIntegrationTest {
     final UUID projectId = this.project();
     final ComponentDto component = this.componentWithVersion(projectId, "17.2");
     this.recordCheck(component, "17.4");
-    doThrow(new SourceException("Sending the notification failed")).when(this.telegramClient).send(anyString());
+    doThrow(new SourceException("Sending the notification failed")).when(this.telegramClient).send(any(NotificationMessage.class));
 
     this.notificationJob.sendDailyNotification();
 
     // Written down before the send, the entry would now be reported for good and
     // the only trace of it would be one line in a log nobody reads.
-    doNothing().when(this.telegramClient).send(anyString());
+    doNothing().when(this.telegramClient).send(any(NotificationMessage.class));
     this.notificationJob.sendDailyNotification();
 
-    verify(this.telegramClient, times(2)).send(anyString());
+    verify(this.telegramClient, times(2)).send(any(NotificationMessage.class));
+  }
+
+  @Test
+  void keepsTheNewsWhenOneOfTwoChannelsFailed() {
+    final NotificationChannel mail = mock(NotificationChannel.class);
+    when(mail.isConfiguredForSending()).thenReturn(true);
+    doThrow(new SourceException("Sending the notification by mail failed")).when(mail).send(any(NotificationMessage.class));
+    this.notificationJob = new NotificationJob(this.notificationFacade, List.of(this.telegramClient, mail));
+    final UUID projectId = this.project();
+    final ComponentDto component = this.componentWithVersion(projectId, "17.2");
+    this.recordCheck(component, "17.4");
+
+    this.notificationJob.sendDailyNotification();
+
+    // Written down after Telegram alone, the readers of the mail would never hear of it.
+    doNothing().when(mail).send(any(NotificationMessage.class));
+    this.notificationJob.sendDailyNotification();
+
+    verify(this.telegramClient, times(2)).send(any(NotificationMessage.class));
+    verify(mail, times(2)).send(any(NotificationMessage.class));
   }
 
   @Test
@@ -167,14 +190,14 @@ class NotificationFacadeIntegrationTest extends AbstractIntegrationTest {
     this.cell(app.getId(), production.getId(), "3.1.0");
     this.dependsOn(app, List.of(constraint(database, ">=14 <18"), constraint(broker, ">=7 <8")));
 
-    final ArgumentCaptor<String> sent = ArgumentCaptor.forClass(String.class);
+    final ArgumentCaptor<NotificationMessage> sent = ArgumentCaptor.forClass(NotificationMessage.class);
     this.notificationJob.sendDailyNotification();
 
     // Two prerequisites, one component, one environment: told apart only by the
     // dependency itself. A key that cannot do that reports one of them and
     // swallows the other for good.
     verify(this.telegramClient).send(sent.capture());
-    assertEquals(2, sent.getValue().lines().filter(line -> line.contains(app.getName())).count());
+    assertEquals(2, sent.getValue().body().lines().filter(line -> line.contains(app.getName())).count());
   }
 
   private void dependsOn(final ComponentDto component, final List<ComponentDependencyRequest> dependencies) {
