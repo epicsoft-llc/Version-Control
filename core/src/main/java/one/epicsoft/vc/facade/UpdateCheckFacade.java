@@ -227,10 +227,11 @@ public class UpdateCheckFacade {
                                          @Nonnull final List<VersionCandidate> candidates,
                                          @Nonnull final Instant now) {
     final List<ComponentPackageEntity> packages = this.componentService.findPackages(component.getId());
+    List<UpdateCheckPackageEntity> packageResults = List.of();
     if (packages.isEmpty()) {
       this.applySingleResult(component, check, candidates);
     } else {
-      this.applyPackageResults(component, check, candidates, packages);
+      packageResults = this.applyPackageResults(component, check, candidates, packages);
     }
 
     check.setCheckState(CheckState.OK);
@@ -251,7 +252,13 @@ public class UpdateCheckFacade {
     if (nonBlank(check.getLatestVersion())) {
       this.updateDecisionFacade.reopenIfNewerVersion(component.getId(), check.getLatestVersion());
     }
-    return this.updateCheckService.save(check);
+    final UpdateCheckEntity saved = this.updateCheckService.save(check);
+    if (!packageResults.isEmpty()) {
+      // Only after the state is set: on a component's first check the flush in here
+      // inserts its row, and the database refuses a check without a state.
+      this.updateCheckService.replacePackages(saved, packageResults);
+    }
+    return saved;
   }
 
   private void applySingleResult(@Nonnull final ComponentEntity component,
@@ -277,10 +284,11 @@ public class UpdateCheckFacade {
    * rather than the version line. Ordering is the Debian comparison, and a
    * component that has to stay on one line uses the major constraint.
    */
-  private void applyPackageResults(@Nonnull final ComponentEntity component,
-                                   @Nonnull final UpdateCheckEntity check,
-                                   @Nonnull final List<VersionCandidate> candidates,
-                                   @Nonnull final List<ComponentPackageEntity> packages) {
+  @Nonnull
+  private List<UpdateCheckPackageEntity> applyPackageResults(@Nonnull final ComponentEntity component,
+                                                             @Nonnull final UpdateCheckEntity check,
+                                                             @Nonnull final List<VersionCandidate> candidates,
+                                                             @Nonnull final List<ComponentPackageEntity> packages) {
     final Map<String, List<VersionCandidate>> byPackage =
         candidates.stream()
                   .filter(candidate -> nonBlank(candidate.packageName()))
@@ -309,11 +317,11 @@ public class UpdateCheckFacade {
       }
     }
 
-    // Written only once every package resolved. Applying them one by one would
+    // Set only once every package resolved. Applying them one by one would
     // leave the leading version of a half finished run standing next to an error
     // state - a fresh number that no successful check ever produced.
     check.setLatestVersion(leadingVersion);
-    this.updateCheckService.replacePackages(this.updateCheckService.save(check), results);
+    return results;
   }
 
   @Nonnull

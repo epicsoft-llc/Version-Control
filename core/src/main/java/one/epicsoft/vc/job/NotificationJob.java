@@ -1,15 +1,19 @@
 package one.epicsoft.vc.job;
 
+import jakarta.annotation.Nonnull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import one.epicsoft.vc.adapter.TelegramClient;
+import one.epicsoft.vc.adapter.NotificationChannel;
+import one.epicsoft.vc.data.NotificationDraft;
+import one.epicsoft.vc.data.NotificationMessage;
 import one.epicsoft.vc.facade.NotificationFacade;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import java.util.List;
 
 /**
- * The daily message, once, at a fixed time.
+ * The daily message, once, at a fixed time, to every configured channel.
  *
  * <p>Its own job, not a tail on the check scheduler: the checks are spread
  * across the day on purpose, and a message per check would be exactly the stream
@@ -22,7 +26,7 @@ import org.springframework.stereotype.Component;
 public class NotificationJob {
 
   private final NotificationFacade notificationFacade;
-  private final TelegramClient telegramClient;
+  private final List<NotificationChannel> notificationChannels;
 
   /**
    * Collect, send, then write down what went out — in that order and in three
@@ -32,23 +36,38 @@ public class NotificationJob {
    * been delivered, so a failed send costs a day rather than a whole message.
    * And the send sits between two transactions rather than inside one, so no
    * database connection waits on a foreign server.
+   *
+   * <p>Written down only when every configured channel delivered: a broken
+   * channel repeats the news on the others rather than losing it for its own
+   * readers.
    */
   @Scheduled(cron = "#{@notificationProperties.cron}")
   public void sendDailyNotification() {
-    final NotificationFacade.NotificationDraft draft = this.notificationFacade.collect();
+    final NotificationDraft draft = this.notificationFacade.collect();
     if (draft.isEmpty()) {
       log.debug("Nothing to notify about");
       return;
     }
-    try {
-      this.telegramClient.send(draft.text());
-    } catch (final RuntimeException exception) {
-      // The message of this one carries nothing from the HTTP client on purpose:
-      // the request address is the bot token.
-      log.error("The daily notification could not be sent: {}", exception.getMessage());
-      return;
+    boolean delivered = true;
+    for (final NotificationChannel channel : this.notificationChannels) {
+      if (channel.isConfiguredForSending()) {
+        delivered &= this.send(channel, draft.message());
+      }
     }
-    this.notificationFacade.remember(draft);
-    log.info("Sent the daily notification");
+    if (delivered) {
+      this.notificationFacade.remember(draft);
+      log.info("Sent the daily notification");
+    }
+  }
+
+  private boolean send(@Nonnull final NotificationChannel channel, @Nonnull final NotificationMessage message) {
+    try {
+      channel.send(message);
+      return true;
+    } catch (final RuntimeException exception) {
+      // The channel words this message; Telegram's never carries the token of its address.
+      log.error("The daily notification could not be sent by {}: {}", channel.channelType(), exception.getMessage());
+      return false;
+    }
   }
 }

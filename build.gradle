@@ -1,6 +1,6 @@
 // ###########################################################
 // #### Update Gradle Wrapper:
-// #### ./gradlew wrapper --gradle-version 9.7.1
+// #### ./gradlew wrapper --gradle-version 9.8.1 --retries 3
 // #### Update ".vfox.toml" as well
 // ###########################################################
 

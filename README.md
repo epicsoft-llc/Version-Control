@@ -13,32 +13,40 @@ It is an inventory, not a deployment system. It runs no actions on target hosts,
 application dependencies (Renovate and Dependabot do that), and it does not read the deployed versions
 by itself: you enter them, in the same work step in which you upgrade the component.
 
-> **Status: version 0.1.0.** Everything described here is built, tested and translated. Images are
-> published for `main`; the schema of 0.1.0 is fixed, so an upgrade from here on migrates rather than
-> resets.
+- Images: [Docker Hub](https://hub.docker.com/r/epicsoft/version-control) and the
+  [GitLab container registry](https://gitlab.com/epicsoft-networks/version-control/container_registry)
+- License: MIT
+- Source: developed on [GitLab](https://gitlab.com/epicsoft-networks/version-control), mirrored to
+  [GitHub](https://github.com/epicsoft-llc/version-control) — issues are welcome on both; code changes only as merge
+  requests on GitLab, the mirror cannot take pull requests
+- Changes: [CHANGELOG.md](https://gitlab.com/epicsoft-networks/version-control/-/blob/main/CHANGELOG.md)
+
+> **Status: version 0.1.0.** Everything described here is built, tested and translated. Releases go to
+> Docker Hub and the GitLab registry, branch builds to the GitLab registry only. The schema of 0.1.0 is
+> fixed, so an upgrade from here on migrates rather than resets.
 
 ## What it looks like
 
 The start page is the task list, not the matrix — it answers what needs doing, in a fixed order: out of
 support before merely behind, a check that has been failing for days before a cosmetic warning.
 
-![Task list](docs/images/tasks.jpg)
+![Task list](https://gitlab.com/epicsoft-networks/version-control/-/raw/main/docs/images/tasks.jpg)
 
 The matrix is the second view: one row per component, one column per environment, and the newest
 available version at the end. Rows whose environments disagree are marked, a cell that is deliberately
 empty (`–`) is not the same as one nobody has filled in.
 
-![Version matrix](docs/images/matrix.jpg)
+![Version matrix](https://gitlab.com/epicsoft-networks/version-control/-/raw/main/docs/images/matrix.jpg)
 
 A component page carries the source and its version rule, the last check, what may be upgraded to next
 per environment — and what would be a bigger jump than allowed, shown as a hint rather than a task —
 plus the dependencies in both directions, evaluated per environment.
 
-![Component detail](docs/images/component-detail.jpg)
+![Component detail](https://gitlab.com/epicsoft-networks/version-control/-/raw/main/docs/images/component-detail.jpg)
 
 Projects, environments and components are maintained on one page.
 
-![Master data](docs/images/master-data.jpg)
+![Master data](https://gitlab.com/epicsoft-networks/version-control/-/raw/main/docs/images/master-data.jpg)
 
 ## What it watches
 
@@ -55,12 +63,20 @@ monitoring stack, the Docker packages on a host. Sources it can check:
 On top of that it tracks end-of-life dates, records every change with a note, backup reference,
 rollback path and downtime, and remembers why an available update was deliberately postponed.
 
+Once a day it reports what is new — to a Telegram chat, by mail through any SMTP server, or both,
+whichever is configured. On a day without news it sends nothing.
+
 ## Running it
 
 ```bash
 cp .env.example .env      # fill in at least the database credentials
 docker compose -f deploy/compose.yml up
 ```
+
+Both files come from the repository: clone it, or take
+[`deploy/compose.yml`](https://gitlab.com/epicsoft-networks/version-control/-/blob/main/deploy/compose.yml) and
+[`.env.example`](https://gitlab.com/epicsoft-networks/version-control/-/blob/main/.env.example) alone.
+`VC_IMAGE_REPOSITORY` and `VC_IMAGE_TAG` in `.env` choose the images — see [Images](#images).
 
 The dashboard is then on <http://localhost:8081>. It serves the interface and forwards `/api` to the
 backend, so there is a single entry point and the frontend build is environment independent.
@@ -99,13 +115,20 @@ would then have to be kept out of production by hand.
 
 ### Images
 
-Two images are built from this repository and published to the GitLab Container Registry of the
-project, tagged by branch (`vc-core-main`, `vc-dashboard-develop`, …):
+Two images are built from this repository, both in one repository per registry with the module in the tag:
 
 | Image | Base | Contains |
 |---|---|---|
 | `vc-core` | `eclipse-temurin:25-jre-alpine` | the backend as a single jar, non-root, health check on 8090 |
 | `vc-dashboard` | `nginx:alpine` | the built interface, SPA fallback, `/api` forwarded to the backend |
+
+| Registry | Repository | Tags |
+|---|---|---|
+| Docker Hub | `epicsoft/version-control` | releases |
+| GitLab | `registry.gitlab.com/epicsoft-networks/version-control` | releases and the branch builds `vc-core-main`, `vc-dashboard-develop`, … |
+
+A release `1.2.3` is tagged `vc-core-1.2.3` and moves `vc-core-1.2`, `vc-core-1` and `vc-core-latest`
+along, the same for `vc-dashboard`. A pinned full version changes only when you change it.
 
 PostgreSQL comes from the official image; `deploy/compose.yml` starts all three. Swap the `image` line
 for the commented `build` block in that file to run local changes.
@@ -121,12 +144,12 @@ docs/          documentation and the screenshots above
 
 ### Conventions
 
-[`CODE_CONVENTION.md`](CODE_CONVENTION.md) — read it before changing code. [`CONTRIBUTING.md`](CONTRIBUTING.md)
-covers the workflow. Translations are explained in [`docs/i18n.md`](docs/i18n.md).
+[`CODE_CONVENTION.md`](https://gitlab.com/epicsoft-networks/version-control/-/blob/main/CODE_CONVENTION.md) — read it before changing code. [`CONTRIBUTING.md`](https://gitlab.com/epicsoft-networks/version-control/-/blob/main/CONTRIBUTING.md)
+covers the workflow. Translations are explained in [`docs/i18n.md`](https://gitlab.com/epicsoft-networks/version-control/-/blob/main/docs/i18n.md).
 
 ### Configuration
 
-Everything is configured through environment variables; see [`.env.example`](.env.example). Values that
+Everything is configured through environment variables; see [`.env.example`](https://gitlab.com/epicsoft-networks/version-control/-/blob/main/.env.example). Values that
 only come from the environment carry the literal `USE_ENV` in `application.yml`, and every consumer
 treats that exactly like a missing value — an unconfigured feature switches itself off instead of
 calling an upstream API with the word `USE_ENV` as its token.
@@ -138,9 +161,13 @@ calling an upstream API with the word `USE_ENV` as its token.
 | `VC_DATABASE_HOST` / `_PORT` / `_NAME` | yes | where PostgreSQL is; the compose file sets the first two |
 | `VC_DATABASE_USERNAME` / `_PASSWORD` | yes | database credentials |
 | `VC_HTTP_PORT` | no (8081) | the port the dashboard is published on |
-| `VC_IMAGE_TAG` | no (main) | which branch's images the compose file pulls |
+| `VC_IMAGE_REPOSITORY` | no (GitLab) | where the compose file pulls from: `registry.gitlab.com/epicsoft-networks/version-control` or `epicsoft/version-control` on Docker Hub |
+| `VC_IMAGE_TAG` | no (main) | a release such as `0.1.0` or `latest`, or a branch build, `main` or `develop` — Docker Hub carries releases only |
 | `VC_GITHUB_TOKEN` | no | raises the GitHub rate limit from 60 to 5.000 requests/hour |
-| `VC_TELEGRAM_BOT_TOKEN` / `VC_TELEGRAM_CHAT_ID` | no | without them the daily summary is not sent |
+| `VC_TELEGRAM_BOT_TOKEN` / `VC_TELEGRAM_CHAT_ID` | no | the daily summary to a Telegram chat; without them nothing goes there |
+| `VC_MAIL_HOST` / `_PORT` / `_SECURITY` | no | the daily summary by mail, through any SMTP server. `_SECURITY` is `starttls` (default, port 587), `tls` (465) or `none` (25, login in clear text); `_PORT` only for a different port |
+| `VC_MAIL_USERNAME` / `_PASSWORD` | no | the login at the mail server; without a username none is attempted |
+| `VC_MAIL_FROM` / `VC_MAIL_TO` | no | the sender (`Version Control <vc@example.com>` works) and comma separated recipients; without host, sender and recipient no mail is sent |
 | `VC_TOLGEE_URL` / `_PROJECT_ID` / `_API_KEY` | no | build time only, to re-export the translations |
 
 **Application settings** — `application.yml`, overridable per environment:
@@ -181,4 +208,8 @@ Nothing about a mirror is stored in this repository.
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2026 epicsoft LLC
+[MIT](https://gitlab.com/epicsoft-networks/version-control/-/blob/main/LICENSE) — Copyright (c) 2026 epicsoft LLC
+
+The MIT license applies only to files created by epicsoft LLC. Third-party software — the Gradle wrapper, the
+libraries bundled into the images and the images they build on, such as Eclipse Temurin, Alpine Linux and
+nginx — remains under its own licenses.

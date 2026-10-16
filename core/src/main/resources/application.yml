@@ -19,9 +19,21 @@ vc:
     #### rate limit (60 requests/hour instead of 5.000).
     token: USE_ENV
   telegram:
-    #### Optional. Without a token the daily notification is not sent at all.
+    #### Optional. Without a token nothing goes to Telegram.
     bot-token: USE_ENV
     chat-id: USE_ENV
+  mail:
+    #### Optional, any SMTP server. Without host, sender and recipient no mail is sent.
+    host: USE_ENV
+    #### starttls (587), tls (465) or none (25); vc.mail.port only for a different port.
+    security: starttls
+    #### Without a username no login is attempted.
+    username: USE_ENV
+    password: USE_ENV
+    #### The sender, optionally with a name: "Version Control <vc@example.com>".
+    from: USE_ENV
+    #### One or more recipients, comma separated.
+    to: USE_ENV
   scheduler:
     #### Switched off in tests: a scheduled check would call upstream sources
     #### from a test run, which is both slow and somebody else's traffic.
