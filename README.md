@@ -209,3 +209,7 @@ Nothing about a mirror is stored in this repository.
 ## License
 
 [MIT](https://gitlab.com/epicsoft-networks/version-control/-/blob/main/LICENSE) — Copyright (c) 2026 epicsoft LLC
+
+The MIT license applies only to files created by epicsoft LLC. Third-party software — the Gradle wrapper, the
+libraries bundled into the images and the images they build on, such as Eclipse Temurin, Alpine Linux and
+nginx — remains under its own licenses.

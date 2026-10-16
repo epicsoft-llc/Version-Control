@@ -24,8 +24,8 @@ All notable changes to this project are documented here, grouped as in
 - The daily notification goes to every configured channel and counts as reported only once all of them delivered
   it: a failing channel repeats the news on the others the next day instead of losing it for its own readers
 - Gradle wrapper 9.8.1
-- The README reads the same on GitLab, GitHub and Docker Hub: absolute links and images, where the images are
-  and where to report issues
+- The README reads the same on GitLab, GitHub and Docker Hub: absolute links and images, where the images are,
+  where to report issues and what the MIT license covers
 
 ### Fixed
 - The first check of a component with packages (APT repository) ended in a server error instead of storing its
