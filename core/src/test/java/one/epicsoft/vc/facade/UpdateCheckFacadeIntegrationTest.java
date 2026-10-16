@@ -9,6 +9,7 @@ import one.epicsoft.vc.dto.ComponentRequest;
 import one.epicsoft.vc.dto.EnvironmentDto;
 import one.epicsoft.vc.dto.EnvironmentRequest;
 import one.epicsoft.vc.dto.ProjectRequest;
+import one.epicsoft.vc.dto.UpdateCheckDto;
 import one.epicsoft.vc.dto.VersionPreviewDto;
 import one.epicsoft.vc.dto.VersionPreviewRequest;
 import one.epicsoft.vc.enums.CheckState;
@@ -152,6 +153,38 @@ class UpdateCheckFacadeIntegrationTest extends AbstractIntegrationTest {
     } finally {
       index.stop(0);
     }
+  }
+
+  @Test
+  void readsTheLastCheckAgainWhenTheRuleChanges() throws IOException {
+    final HttpServer index = this.aptIndex("""
+        Package: postgresql
+        Version: 17.11-1
+
+        Package: postgresql
+        Version: 18.6-1
+        """);
+    final ComponentRequest request =
+      this.request(this.project(), "PostgreSQL", SourceType.APT_REPOSITORY,
+                   "http://127.0.0.1:%d/repository".formatted(index.getAddress().getPort()));
+    request.setTagPattern("^\\d+\\.\\d+-\\d+$");
+    final ComponentDto component;
+    try {
+      component = this.componentFacade.create(request);
+      assertEquals("18.6-1", this.updateCheckFacade.check(component.getId(), false).getLatestVersion());
+    } finally {
+      index.stop(0);
+    }
+    final Instant checkedAt = this.updateCheckFacade.findAllByComponent(component.getId()).getFirst().getCheckedAt();
+
+    request.setMajorConstraint("17");
+    this.componentFacade.update(component.getId(), request);
+
+    // The source is gone by now: the answer comes from what the last check stored,
+    // and the check itself keeps its time.
+    final UpdateCheckDto check = this.updateCheckFacade.findAllByComponent(component.getId()).getFirst();
+    assertEquals("17.11-1", check.getLatestVersion());
+    assertEquals(checkedAt, check.getCheckedAt());
   }
 
   @Test

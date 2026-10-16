@@ -224,7 +224,6 @@ TST:dashboard:
   services:
     - docker:dind
   before_script:
-    #### Over stdin: '-p' would put the token in the process list of the runner.
     - echo "${CI_JOB_TOKEN}" | docker login -u gitlab-ci-token --password-stdin "${CI_REGISTRY}"
     - |
       #### Job logs are public: nothing here may print a value.

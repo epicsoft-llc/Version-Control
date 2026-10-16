@@ -4,6 +4,13 @@ All notable changes to this project are documented here, grouped as in
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A release is headed by its tag and date,
 `## [1.2.3] - YYYY-MM-DD`; changes from before the first tag are headed by their date alone.
 
+## [0.1.2] - 2026-10-16
+
+### Fixed
+- A changed version rule — pattern, major line, prereleases, strategy — applies to the last check right away, from
+  the versions it found, instead of at the next check up to two days later. Until then a component held on major 17
+  was still offered 18 in the matrix
+
 ## [0.1.1] - 2026-10-16
 
 ### Fixed
