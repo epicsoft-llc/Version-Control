@@ -28,6 +28,7 @@ import one.epicsoft.vc.service.ProjectService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -55,6 +56,7 @@ public class ComponentFacade {
   private final ComponentDependencyService componentDependencyService;
   private final ComponentDependencyMapper componentDependencyMapper;
   private final ConstraintEvaluator constraintEvaluator;
+  private final UpdateCheckFacade updateCheckFacade;
 
   @Nonnull
   @Transactional(readOnly = true, rollbackFor = Throwable.class)
@@ -98,13 +100,24 @@ public class ComponentFacade {
         && this.componentService.existsByProjectAndName(entity.getProjectId(), request.getName())) {
       throw AppConflictException.duplicateName("Component", request.getName());
     }
+    final List<Object> ruleBefore = ruleOf(entity);
     this.componentMapper.updateEntity(entity, request);
     normalise(entity);
     final ComponentEntity saved = this.componentService.save(entity);
     this.applyUpgradeStops(saved, request.getUpgradeStops());
     this.applyDependencies(saved, request.getDependencies());
     this.applyPackages(saved, request.getPackages());
+    if (nonEquals(ruleBefore, ruleOf(saved))) {
+      this.updateCheckFacade.reapplyRule(saved.getId());
+    }
     return this.toDtos(List.of(saved)).getFirst();
+  }
+
+  /** What decides which candidate wins; a change here reads the last check again. */
+  @Nonnull
+  private static List<Object> ruleOf(@Nonnull final ComponentEntity component) {
+    return Arrays.asList(component.getTagPattern(), component.getMajorConstraint(), component.isAllowPrerelease(),
+                         component.getVersionStrategy());
   }
 
   /** Takes the version records with it; the package rows stay until the component is removed for good. */

@@ -186,6 +186,20 @@ public class UpdateCheckFacade {
   }
 
   /**
+   * Reads the last check again under the rule as it stands now — from the stored
+   * candidates, without asking the source. Otherwise a tightened rule keeps
+   * reporting what the old one found until the next check: a component held on 17
+   * would still be offered 18.
+   */
+  @Transactional(rollbackFor = Throwable.class)
+  public void reapplyRule(@Nonnull final UUID componentId) {
+    final ComponentEntity component = this.componentService.getById(componentId);
+    this.updateCheckService.findByComponent(componentId)
+                           .filter(check -> CheckState.OK.equals(check.getCheckState()))
+                           .ifPresent(check -> this.reapply(component, check, storedCandidates(check)));
+  }
+
+  /**
    * The preview as the screen wants it: a rule that matches nothing, or does not
    * compile at all, is the normal state while somebody is writing one. It comes
    * back as an empty list with the reason, not as a server error.
@@ -226,13 +240,7 @@ public class UpdateCheckFacade {
                                          @Nonnull final UpdateCheckEntity check,
                                          @Nonnull final List<VersionCandidate> candidates,
                                          @Nonnull final Instant now) {
-    final List<ComponentPackageEntity> packages = this.componentService.findPackages(component.getId());
-    List<UpdateCheckPackageEntity> packageResults = List.of();
-    if (packages.isEmpty()) {
-      this.applySingleResult(component, check, candidates);
-    } else {
-      packageResults = this.applyPackageResults(component, check, candidates, packages);
-    }
+    final List<UpdateCheckPackageEntity> packageResults = this.applyResults(component, check, candidates);
 
     check.setCheckState(CheckState.OK);
     check.setErrorMessage(null);
@@ -252,6 +260,45 @@ public class UpdateCheckFacade {
     if (nonBlank(check.getLatestVersion())) {
       this.updateDecisionFacade.reopenIfNewerVersion(component.getId(), check.getLatestVersion());
     }
+    return this.saveWithPackages(check, packageResults);
+  }
+
+  private void reapply(@Nonnull final ComponentEntity component,
+                       @Nonnull final UpdateCheckEntity check,
+                       @Nonnull final List<VersionCandidate> candidates) {
+    if (!candidates.isEmpty()) {
+      try {
+        final UpdateCheckEntity saved = this.saveWithPackages(check, this.applyResults(component, check, candidates));
+        // A loosened rule can surface a newer version, and that reopens a decision just as a check would.
+        if (nonBlank(saved.getLatestVersion())) {
+          this.updateDecisionFacade.reopenIfNewerVersion(component.getId(), saved.getLatestVersion());
+        }
+      } catch (final VersionRuleException exception) {
+        // A rule that matches nothing stored is left to the next check, which reports it as a failure.
+        log.info("Rule of component {} matches none of the stored candidates: {}", component.getId(),
+                 exception.getMessage());
+      }
+    }
+  }
+
+  /** The newest candidate per the rule; package results come back to be written after the check itself. */
+  @Nonnull
+  private List<UpdateCheckPackageEntity> applyResults(@Nonnull final ComponentEntity component,
+                                                      @Nonnull final UpdateCheckEntity check,
+                                                      @Nonnull final List<VersionCandidate> candidates) {
+    final List<ComponentPackageEntity> packages = this.componentService.findPackages(component.getId());
+    List<UpdateCheckPackageEntity> results = List.of();
+    if (packages.isEmpty()) {
+      this.applySingleResult(component, check, candidates);
+    } else {
+      results = this.applyPackageResults(component, check, candidates, packages);
+    }
+    return results;
+  }
+
+  @Nonnull
+  private UpdateCheckEntity saveWithPackages(@Nonnull final UpdateCheckEntity check,
+                                             @Nonnull final List<UpdateCheckPackageEntity> packageResults) {
     final UpdateCheckEntity saved = this.updateCheckService.save(check);
     if (!packageResults.isEmpty()) {
       // Only after the state is set: on a component's first check the flush in here
